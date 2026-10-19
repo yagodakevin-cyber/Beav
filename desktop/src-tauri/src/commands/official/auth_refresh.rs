@@ -125,6 +125,11 @@ pub(crate) fn refresh_official_auth_for_ai_request(
                 "ai-401-refresh-failed",
                 format!("url={request_url} error={error}"),
             );
+            // 存储不同步（运行时仍持有登录态）时禁止 force reauth：
+            // 那会清掉 settings 与运行时里仍有效的凭据，复现历史登出事故
+            if error.contains("存储不同步") {
+                return Err(error);
+            }
             force_official_reauth(
                 app,
                 state,
@@ -323,6 +328,17 @@ pub(super) fn refresh_official_auth_session_with_lock(
             return Err(snapshot
                 .last_error
                 .unwrap_or_else(|| "登录失效，请重新登录".to_string()));
+        }
+        // settings 缺会话但运行时仍持有登录态：属存储不同步，不是"未登录"。
+        // 禁止在此破坏性登出（历史缺陷：一次 401 探测请求即可把仍有效的
+        // 登录态连同缓存整体清空）。保留现场，返回可识别错误交由上层处理。
+        if snapshot.logged_in || snapshot.session.is_some() {
+            log_official_auth(
+                state,
+                "refresh-abort",
+                "runtime authenticated but settings session missing; auth state kept",
+            );
+            return Err("官方登录态存储不同步，请重启应用后重试".to_string());
         }
         let _ = auth::mark_auth_logged_out(app, state);
         return Err("官方账号未登录".to_string());

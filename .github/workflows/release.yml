@@ -87,6 +87,14 @@ jobs:
           Copy-Item $ffprobe.FullName (Join-Path $sidecar 'ffprobe-x86_64-pc-windows-msvc.exe') -Force
           Get-ChildItem $sidecar | Format-Table Name, Length
 
+      # tauri.conf.json 的 resources 引用 ../../Plugin/dist/extension（构建产物，
+      # 不入库），必须在桌面包构建前先产出插件 dist。
+      - name: Build browser extension resources
+        working-directory: Plugin
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
       - name: Build Windows installer (NSIS)
         working-directory: desktop
         shell: bash
@@ -137,6 +145,12 @@ jobs:
       - name: Install desktop dependencies
         working-directory: desktop
         run: pnpm install --frozen-lockfile
+
+      - name: Build browser extension resources
+        working-directory: Plugin
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
 
       - name: Build macOS image (DMG)
         working-directory: desktop
