@@ -629,6 +629,59 @@ fn spawn_detached(_script: &str) -> Result<(), String> {
     Err("当前系统不支持自动安装更新".to_string())
 }
 
+const UPDATE_ORCHESTRATION_BATCH_FILE: &str = "update-task.cmd";
+
+/// 生成更新编排批处理文件内容（CRLF 行尾，cmd 原生格式）。
+///
+/// 历史缺陷：整段编排曾拼成 `cmd /C "安装器" /S & start ...` 的内联命令行，
+/// 命令行含多段引号和 `&` 时不满足 cmd /C 的引号保留条件，首尾引号被剥离，
+/// 安装器路径尾部挂着孤立引号而从未执行。改为先落盘批处理文件、再以单一
+/// 路径参数启动：批处理文件内部的引号按常规语义解析，彻底规避该规则。
+fn build_update_batch(wait_seconds: u32, steps: &[String]) -> String {
+    let mut content = String::from("@echo off\r\n");
+    if wait_seconds > 0 {
+        // ping 每次间隔约 1 秒：-n N ≈ 等待 N-1 秒，给应用进程退出留出窗口。
+        content.push_str(&format!("ping -n {} 127.0.0.1 >nul\r\n", wait_seconds + 1));
+    }
+    for step in steps {
+        content.push_str(step);
+        content.push_str("\r\n");
+    }
+    content
+}
+
+fn batch_install_step(installer: &Path) -> String {
+    format!("\"{}\" /S", installer.display())
+}
+
+fn batch_rollback_step(backup_dir: &Path, install_dir: &Path) -> String {
+    format!(
+        "robocopy \"{}\" \"{}\" /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS",
+        backup_dir.display(),
+        install_dir.display()
+    )
+}
+
+fn batch_relaunch_step(title: &str, working_dir: &Path, exe: &Path) -> String {
+    format!(
+        "start \"{}\" /D \"{}\" \"{}\"",
+        title,
+        working_dir.display(),
+        exe.display()
+    )
+}
+
+/// 把编排批处理写入更新根目录并以分离方式启动。
+fn spawn_update_batch(wait_seconds: u32, steps: &[String]) -> Result<(), String> {
+    let batch_path = updates_root()?.join(UPDATE_ORCHESTRATION_BATCH_FILE);
+    std::fs::write(&batch_path, build_update_batch(wait_seconds, steps))
+        .map_err(|error| format!("写入更新编排脚本失败：{error}"))?;
+    // 批处理以原始路径作为唯一参数传给 cmd /C：路径不含空格时不会加引号，
+    // 含空格时 Rust 自动加引号且恰好满足 /C 的保留条件（两段引号之间无特殊
+    // 字符、指向可执行脚本），两种形态都能正确启动。
+    spawn_detached(&batch_path.display().to_string())
+}
+
 /// 备份当前安装目录，供更新失败或新版本异常时回滚。
 fn backup_current_install(current_version: &str) -> Result<PathBuf, String> {
     let install_dir = current_install_dir()?;
@@ -803,16 +856,16 @@ fn install_app_update_blocking(app: &AppHandle) -> Result<Value, String> {
     )?;
 
     // 5. 分离式编排：静默安装 → 自动重启应用。用户数据目录全程不触碰，进度不受影响。
+    // 编排脚本先落盘为批处理文件再启动（cmd /C 内联命令行会触发引号剥离导致安装器从未执行——已修复的历史缺陷）。
     let install_dir = current_install_dir()?;
     let exe_path = std::env::current_exe().map_err(|error| error.to_string())?;
-    let script = format!(
-        "\"{}\" /S & start \"{}\" /D \"{}\" \"{}\"",
-        installer_path.display(),
-        app_brand_display_name(),
-        install_dir.display(),
-        exe_path.display(),
-    );
-    spawn_detached(&script)?;
+    spawn_update_batch(
+        2,
+        &[
+            batch_install_step(&installer_path),
+            batch_relaunch_step(&app_brand_display_name(), &install_dir, &exe_path),
+        ],
+    )?;
 
     // 6. 留出事件推送窗口后退出，交给安装器完成替换并自动重启。
     std::thread::sleep(Duration::from_millis(800));
@@ -854,15 +907,13 @@ fn perform_rollback(app: &AppHandle) -> Result<Value, String> {
 
     let install_dir = current_install_dir()?;
     let exe_path = std::env::current_exe().map_err(|error| error.to_string())?;
-    let script = format!(
-        "timeout /t 2 /nobreak >nul & robocopy \"{}\" \"{}\" /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS & start \"{}\" /D \"{}\" \"{}\"",
-        backup_dir.display(),
-        install_dir.display(),
-        app_brand_display_name(),
-        install_dir.display(),
-        exe_path.display(),
-    );
-    spawn_detached(&script)?;
+    spawn_update_batch(
+        2,
+        &[
+            batch_rollback_step(&backup_dir, &install_dir),
+            batch_relaunch_step(&app_brand_display_name(), &install_dir, &exe_path),
+        ],
+    )?;
 
     std::thread::sleep(Duration::from_millis(500));
     app.exit(0);
@@ -940,11 +991,59 @@ fn get_app_update_status() -> Value {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::{
+        batch_install_step, batch_relaunch_step, batch_rollback_step, build_update_batch,
         checksum_entry_for, compare_semver_like, is_bounded_release_asset_url,
         normalize_version_tag, parse_semver_like, select_checksum_asset, select_platform_asset,
         GitHubReleaseAsset,
     };
+
+    #[test]
+    fn update_batch_uses_crlf_and_quotes_paths() {
+        let content = build_update_batch(
+            2,
+            &[
+                batch_rollback_step(Path::new("C:\\bkp"), Path::new("C:\\Program Files\\Beav")),
+                batch_relaunch_step(
+                    "Beav",
+                    Path::new("C:\\Program Files\\Beav"),
+                    Path::new("C:\\Program Files\\Beav\\beav.exe"),
+                ),
+            ],
+        );
+        let lines: Vec<&str> = content.split("\r\n").collect();
+        assert_eq!(
+            lines,
+            vec![
+                "@echo off",
+                "ping -n 3 127.0.0.1 >nul",
+                "robocopy \"C:\\bkp\" \"C:\\Program Files\\Beav\" /MIR /R:2 /W:2 /NFL /NDL /NJH /NJS",
+                "start \"Beav\" /D \"C:\\Program Files\\Beav\" \"C:\\Program Files\\Beav\\beav.exe\"",
+                "",
+            ]
+        );
+    }
+
+    #[test]
+    fn update_batch_skips_wait_when_zero() {
+        let content = build_update_batch(
+            0,
+            &[batch_install_step(Path::new(
+                "D:\\updates\\downloads\\Beav_2.10.0_x64-setup.exe",
+            ))],
+        );
+        let lines: Vec<&str> = content.split("\r\n").collect();
+        assert_eq!(
+            lines,
+            vec![
+                "@echo off",
+                "\"D:\\updates\\downloads\\Beav_2.10.0_x64-setup.exe\" /S",
+                "",
+            ]
+        );
+    }
 
     #[test]
     fn version_tag_normalization_removes_v_prefix_only() {
