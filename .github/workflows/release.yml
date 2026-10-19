@@ -63,6 +63,30 @@ jobs:
         working-directory: desktop
         run: pnpm install --frozen-lockfile
 
+      # tauri.conf.json 的 externalBin 引用 ffmpeg/ffprobe sidecar，
+      # 这两个大体积二进制不入库，CI 构建前统一从 BtbN/FFmpeg-Builds 下载，
+      # 解压后按 Rust target triple 命名放入 desktop/src-tauri/binaries/。
+      - name: Download ffmpeg/ffprobe sidecar binaries
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg-win64-gpl.zip'
+          Invoke-WebRequest `
+            -Uri 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip' `
+            -OutFile $zip
+          $dest = Join-Path $env:RUNNER_TEMP 'ffmpeg-win64'
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $ffmpeg = Get-ChildItem -Path $dest -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1
+          $ffprobe = Get-ChildItem -Path $dest -Recurse -Filter 'ffprobe.exe' | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) {
+            throw 'ffmpeg.exe / ffprobe.exe not found in downloaded archive'
+          }
+          $sidecar = 'desktop/src-tauri/binaries'
+          New-Item -ItemType Directory -Force -Path $sidecar | Out-Null
+          Copy-Item $ffmpeg.FullName (Join-Path $sidecar 'ffmpeg-x86_64-pc-windows-msvc.exe') -Force
+          Copy-Item $ffprobe.FullName (Join-Path $sidecar 'ffprobe-x86_64-pc-windows-msvc.exe') -Force
+          Get-ChildItem $sidecar | Format-Table Name, Length
+
       - name: Build Windows installer (NSIS)
         working-directory: desktop
         shell: bash

@@ -84,7 +84,7 @@ git push origin HEAD:main v<版本号>   # 分支与标签一次推送；标签�
 `.github/workflows/release.yml`，由 `v*` 标签推送触发：
 
 1. **verify-version**（ubuntu）：校验 tag = `desktop/package.json` 版本 = `Plugin/src/manifest.json` 版本，不一致立即失败
-2. **build-windows**（windows-latest）：Rust 工具链（dtolnay/rust-toolchain + rust-cache 加速）→ `tauri build --bundles nsis` → 产出 `Beav_<版本>_x64-setup.exe`
+2. **build-windows**（windows-latest）：下载 ffmpeg/ffprobe sidecar 二进制（BtbN/FFmpeg-Builds，按 target triple 命名放入 `desktop/src-tauri/binaries/`，该目录不入库）→ Rust 工具链（dtolnay/rust-toolchain + rust-cache 加速）→ `tauri build --bundles nsis` → 产出 `Beav_<版本>_x64-setup.exe`
 3. **build-macos**（macos-latest，`continue-on-error`）：DMG 为可选产物，失败不阻断正式发布
 4. **build-extension**（ubuntu）：`Beav-extension-<版本>.zip`
 5. **publish**：`sha256sum --binary` 生成 `SHA256SUMS.txt`（排除自身）→ `gh release create --verify-tag --generate-notes` 发布全部资产
