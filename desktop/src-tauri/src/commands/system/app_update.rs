@@ -49,6 +49,28 @@ fn app_update_debug_log_enabled() -> bool {
     std::env::var("REDBOX_APP_UPDATE_DEBUG").ok().as_deref() == Some("1")
 }
 
+/// debug 排障日志：同时写 stderr 与 %APPDATA%\Beav\updates\update-debug.log，
+/// 避免 GUI 子系统下 stderr 重定向不可用导致排障信息丢失。
+fn app_update_debug_log(message: String) {
+    if !app_update_debug_log_enabled() {
+        return;
+    }
+    eprintln!("[AppUpdate] {message}");
+    if let Ok(root) = updates_root() {
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(root.join("update-debug.log"))
+        {
+            let _ = writeln!(file, "{stamp} [AppUpdate] {message}");
+        }
+    }
+}
+
 fn normalize_version_tag(raw: &str) -> String {
     raw.trim()
         .trim_start_matches(|value| value == 'v' || value == 'V')
@@ -250,12 +272,14 @@ fn fetch_latest_app_update() -> Result<LatestAppUpdate, String> {
         .map_err(|error| format!("更新源连接失败：{error}"))?;
 
     let status = response.status();
+    app_update_debug_log(format!("fetch status={status}"));
     let data = response
         .json::<GitHubReleaseResponse>()
         .map_err(|error| format!("更新源响应解析失败：{error}"))?;
 
     if status == reqwest::StatusCode::NOT_FOUND {
         // 仓库尚无任何正式 Release：视为无可用更新。
+        app_update_debug_log("fetch 404: no release found".to_string());
         return Ok(LatestAppUpdate {
             ready: false,
             version: String::new(),
@@ -281,6 +305,18 @@ fn fetch_latest_app_update() -> Result<LatestAppUpdate, String> {
         && !version.is_empty()
         && platform_asset.is_some()
         && checksum_asset.is_some();
+
+    app_update_debug_log(format!(
+        "fetch tag={} draft={} prerelease={} assets={} platformAsset={:?} checksum={:?} ready={} version={}",
+        data.tag_name,
+        data.draft,
+        data.prerelease,
+        data.assets.len(),
+        platform_asset.as_ref().map(|asset| asset.name.clone()),
+        checksum_asset.as_ref().map(|asset| asset.name.clone()),
+        ready,
+        version,
+    ));
 
     Ok(LatestAppUpdate {
         ready,
@@ -334,11 +370,13 @@ pub(super) fn check_app_update(
     force_notify: bool,
 ) -> Result<Value, String> {
     let now = Instant::now();
+    app_update_debug_log(format!("check start: force={force}"));
     {
         let mut state = app_update_state()
             .lock()
             .map_err(|_| "App update state lock is poisoned".to_string())?;
         if state.in_flight {
+            app_update_debug_log("check skipped: already in flight".to_string());
             return Ok(json!({
                 "success": false,
                 "hasUpdate": false,
@@ -354,6 +392,7 @@ pub(super) fn check_app_update(
                 })
                 .unwrap_or(false)
         {
+            app_update_debug_log("check skipped: throttled".to_string());
             return Ok(json!({
                 "success": true,
                 "hasUpdate": false,
@@ -370,6 +409,10 @@ pub(super) fn check_app_update(
         let latest = fetch_latest_app_update()?;
         let has_update = latest.ready
             && compare_semver_like(&current_version, &latest.version) == std::cmp::Ordering::Less;
+        app_update_debug_log(format!(
+            "check done: current={} latest={} ready={} hasUpdate={}",
+            current_version, latest.version, latest.ready, has_update
+        ));
         let notice = json!({
             "currentVersion": current_version,
             "latestVersion": latest.version.clone(),
@@ -402,9 +445,7 @@ pub(super) fn check_app_update(
     match result {
         Ok(value) => Ok(value),
         Err(message) => {
-            if app_update_debug_log_enabled() {
-                eprintln!("[AppUpdate] check failed: {message}");
-            }
+            app_update_debug_log(format!("check failed: {message}"));
             Ok(json!({
                 "success": false,
                 "hasUpdate": false,
