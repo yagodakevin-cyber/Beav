@@ -1,5 +1,3 @@
-export * from './agentContext';
-export * from './agentSession';
 export * from './assetDisplay';
 export * from './audioOptions';
 export * from './digitalHuman';

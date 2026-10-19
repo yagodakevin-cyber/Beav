@@ -78,6 +78,19 @@ export function NotificationCenterDrawer() {
     void notificationClient.list(50);
   }, [drawerOpen]);
 
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      setDrawerOpen(false);
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [drawerOpen, setDrawerOpen]);
+
+  const closeDrawer = useMemo(() => () => setDrawerOpen(false), [setDrawerOpen]);
+
   if (!drawerOpen && !isDrawerVisible) return null;
 
   return (
@@ -87,7 +100,8 @@ export function NotificationCenterDrawer() {
           'notification-center-backdrop absolute inset-0 pointer-events-auto',
           drawerPhase === 'open' ? 'notification-center-backdrop--open' : 'notification-center-backdrop--closed'
         )}
-        onMouseDown={() => setDrawerOpen(false)}
+        onMouseDown={closeDrawer}
+        onClick={closeDrawer}
       />
       <aside
         className={clsx(

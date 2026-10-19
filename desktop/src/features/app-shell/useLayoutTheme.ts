@@ -1,5 +1,6 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { isTauriRuntime } from '../../bridge/browserHost';
 import { APP_BRAND } from '../../config/brand';
 import {
   applyAppTheme,
@@ -54,6 +55,7 @@ export function useLayoutTheme(immersiveMode: ImmersiveMode): {
     const effectiveTheme = immersiveMode === 'dark' ? 'dark' : themeMode;
     const windowTheme = immersiveMode === 'dark' ? effectiveTheme : themePreference === 'system' ? null : effectiveTheme;
     applyAppTheme(effectiveTheme);
+    if (!isTauriRuntime()) return;
     void getCurrentWindow().setTheme(windowTheme).catch((error) => {
       console.warn(`[${APP_BRAND.displayName}] failed to apply window theme:`, error);
     });

@@ -22,6 +22,9 @@ pub fn handle_system_channel(
     let result = match channel {
         "app:get-version"
         | "app:check-update"
+        | "app:install-update"
+        | "app:get-update-status"
+        | "app:rollback-update"
         | "app:open-release-page"
         | "app:open-external-url"
         | "app:startup-migration-start"
@@ -58,6 +61,9 @@ pub fn handle_system_channel(
                         .unwrap_or(false);
                     check_app_update(app, force, force)
                 }
+                "app:install-update" => app_update::install_update_command(app),
+                "app:get-update-status" => Ok(app_update::get_app_update_status_value()),
+                "app:rollback-update" => app_update::rollback_update_command(app),
                 "app:open-release-page" => app_actions::open_release_page(payload),
                 "app:open-external-url" => app_actions::open_external_url(payload),
                 "app:startup-migration-status" => crate::startup_migration_status_value(state),

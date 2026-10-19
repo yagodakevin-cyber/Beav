@@ -47,6 +47,10 @@ import {
 } from './settings/shared';
 import { type AiSourceConfig } from '../config/aiSources';
 import {
+    SUPPORTED_AUDIO_TTS_MODELS,
+    normalizeAudioTtsModel,
+} from '../features/media-generation/audioOptions';
+import {
     ECOMMERCE_PLATFORM_GROUPS,
     ecommercePlatformIconPath,
     normalizeEcommercePlatformsSettings,
@@ -352,10 +356,8 @@ const SUBJECT_AUTOSAVE_DELAY_MS = 600;
 const PRODUCT_DETAIL_IMAGE_MIN_COUNT = 5;
 const PRODUCT_DETAIL_IMAGE_MAX_COUNT = 10;
 const PRODUCT_DETAIL_IMAGE_DEFAULT_COUNT = 6;
-const DEFAULT_VOICE_TTS_MODEL = 'cosyvoice-v3.5-plus';
-const DEFAULT_VOICE_CLONE_MODEL = 'cosyvoice-v3.5-plus-voice-clone';
-const MINIMAX_VOICE_CLONE_MODEL = 'minimax-voice-clone';
-const COSYVOICE_CLONE_MODEL = 'cosyvoice-v3.5-plus-voice-clone';
+const DEFAULT_VOICE_TTS_MODEL = 'doubao-seed-tts-2.0';
+const DEFAULT_VOICE_CLONE_MODEL = 'doubao-voice-clone';
 type SubjectVoiceInfo = {
     label: string;
     detail?: string;
@@ -672,40 +674,19 @@ function resolveVoiceTtsModelOverride(settings: Record<string, unknown>, modelId
 function buildVoiceCloneModelOptions(settings: Record<string, unknown>): { options: VoiceCloneModelOption[]; selectedModel: string } {
     const routes = parseJsonObject(settings.ai_model_routes_json);
     const voiceRoute = parseJsonObject(routes.voiceTts);
-    const selectedModel = String(
+    const selectedModel = normalizeAudioTtsModel(String(
         settings.voice_tts_model
         || settings.tts_model
         || voiceRoute.model
         || DEFAULT_VOICE_TTS_MODEL
-    ).trim();
-    const aiSources = parseAiSources(typeof settings.ai_sources_json === 'string' ? settings.ai_sources_json : undefined);
-    const descriptors = aiSources.flatMap((source) => sourceModelDescriptors(source));
-    const ttsModels = filterAiModelsByCapability(descriptors, 'tts');
-    const audioModels = ttsModels.length > 0 ? ttsModels : filterAiModelsByCapability(descriptors, 'audio');
-    const seen = new Set<string>();
-    const options = audioModels
-        .map((model) => model.id.trim())
-        .filter((model) => model && !seen.has(model) && seen.add(model))
-        .map((model) => ({
-            value: model,
-            label: model,
-            description: `${cloneModelForTargetTtsModel(model)} · 克隆后音色绑定此模型`,
-        }));
-    if (selectedModel && !options.some((option) => option.value === selectedModel)) {
-        options.unshift({
-            value: selectedModel,
-            label: selectedModel,
-            description: `${cloneModelForTargetTtsModel(selectedModel, String(settings.voice_clone_model || DEFAULT_VOICE_CLONE_MODEL))} · 当前设置`,
-        });
-    }
-    if (!options.length) {
-        options.push({
-            value: DEFAULT_VOICE_TTS_MODEL,
-            label: DEFAULT_VOICE_TTS_MODEL,
-            description: `${COSYVOICE_CLONE_MODEL} · 默认`,
-        });
-    }
-    return { options, selectedModel: selectedModel || options[0]?.value || DEFAULT_VOICE_TTS_MODEL };
+    ).trim());
+    // 只保留官方白名单两项：doubao-seed-tts-2.0 与 cosyvoice-v3.5-flash。
+    const options: VoiceCloneModelOption[] = SUPPORTED_AUDIO_TTS_MODELS.map((option) => ({
+        value: option.value,
+        label: option.label,
+        description: `${cloneModelForTargetTtsModel(option.value)} · 克隆后音色绑定此模型`,
+    }));
+    return { options, selectedModel };
 }
 
 function MediaMasonryThumb({ asset }: { asset: MediaAsset }) {
@@ -886,9 +867,9 @@ function displayModelName(value?: string): string {
 }
 
 function cloneModelForTargetTtsModel(targetTtsModel: string, fallbackCloneModel = DEFAULT_VOICE_CLONE_MODEL): string {
-    const key = normalizedModelKey(targetTtsModel);
-    if (key.includes('cosyvoice')) return COSYVOICE_CLONE_MODEL;
-    if (key.startsWith('speech-') || key.startsWith('speech_') || key.includes('minimax')) return MINIMAX_VOICE_CLONE_MODEL;
+    const key = targetTtsModel.trim().toLowerCase();
+    if (key.includes('cosyvoice')) return `${key}-voice-clone`;
+    if (key.startsWith('doubao')) return DEFAULT_VOICE_CLONE_MODEL;
     return fallbackCloneModel || DEFAULT_VOICE_CLONE_MODEL;
 }
 

@@ -416,7 +416,7 @@ function replaceCargoPackageName(contents, packageName) {
 }
 
 function replaceCargoLockRootPackageName(contents, packageName) {
-  const pattern = /(\[\[package\]\]\nname = )"(redbox|thrive|beav)"(\nversion = "\d+\.\d+\.\d+(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?")/;
+  const pattern = /(\[\[package\]\]\r?\nname = )"(redbox|thrive|beav)"(\r?\nversion = "\d+\.\d+\.\d+(?:-[0-9A-Za-z-.]+)?(?:\+[0-9A-Za-z-.]+)?")/;
   if (!pattern.test(contents)) {
     throw new Error('Failed to locate src-tauri/Cargo.lock root package');
   }

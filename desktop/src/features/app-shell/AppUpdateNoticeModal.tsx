@@ -94,28 +94,47 @@ export function AppUpdateNoticeModal({
             </div>
             {notice.mode !== 'current' && (
               <div className="flex items-center gap-2">
-                {installState.status === 'failed' && (
+                {notice.installable === false ? (
                   <button
                     type="button"
                     onClick={() => {
                       void openReleasePage();
                     }}
                     disabled={isOpeningReleasePage}
-                    className="h-11 px-4 rounded-lg border border-border text-text-secondary text-sm font-medium hover:bg-surface-secondary disabled:opacity-60 transition-colors whitespace-nowrap"
+                    className="h-11 px-5 rounded-lg bg-accent-primary text-white text-sm font-medium hover:bg-accent-hover disabled:opacity-60 transition-colors whitespace-nowrap"
                   >
                     {isOpeningReleasePage ? t('layout.opening') : t('layout.openDownloadPage')}
                   </button>
+                ) : (
+                  <>
+                    {installState.status === 'failed' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void openReleasePage();
+                        }}
+                        disabled={isOpeningReleasePage}
+                        className="h-11 px-4 rounded-lg border border-border text-text-secondary text-sm font-medium hover:bg-surface-secondary disabled:opacity-60 transition-colors whitespace-nowrap"
+                      >
+                        {isOpeningReleasePage ? t('layout.opening') : t('layout.openDownloadPage')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void installUpdate();
+                      }}
+                      disabled={isInstallingUpdate}
+                      className="h-11 px-5 rounded-lg bg-accent-primary text-white text-sm font-medium hover:bg-accent-hover disabled:opacity-60 transition-colors whitespace-nowrap"
+                    >
+                      {installState.status === 'installed'
+                        ? t('layout.updateRestarting')
+                        : isInstallingUpdate
+                          ? t('layout.updating')
+                          : t('layout.installUpdate')}
+                    </button>
+                  </>
                 )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    void installUpdate();
-                  }}
-                  disabled={isInstallingUpdate}
-                  className="h-11 px-5 rounded-lg bg-accent-primary text-white text-sm font-medium hover:bg-accent-hover disabled:opacity-60 transition-colors whitespace-nowrap"
-                >
-                  {isInstallingUpdate ? t('layout.updating') : t('layout.installUpdate')}
-                </button>
               </div>
             )}
           </div>

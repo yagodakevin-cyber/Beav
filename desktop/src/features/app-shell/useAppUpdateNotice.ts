@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { subscribeAppUpdateAvailable, subscribeAppUpdateInstallProgress } from '../../bridge/appEvents';
 import { SHOW_CURRENT_RELEASE_NOTES_EVENT, currentReleaseNotesMarkdown } from '../../utils/currentReleaseNotes';
 import { appAlert } from '../../utils/appDialogs';
+import { useI18n } from '../../i18n';
 
 export interface AppUpdateNoticePayload {
   currentVersion: string;
@@ -71,6 +72,7 @@ function markAppUpdateNoticeShown(payload: AppUpdateNoticePayload): void {
 }
 
 export function useAppUpdateNotice(openDownloadFailedLabel: string) {
+  const { t } = useI18n();
   const [updateNotice, setUpdateNotice] = useState<AppUpdateNoticePayload | null>(null);
   const [isOpeningReleasePage, setIsOpeningReleasePage] = useState(false);
   const [installState, setInstallState] = useState<AppUpdateInstallState>(initialInstallState);
@@ -109,25 +111,43 @@ export function useAppUpdateNotice(openDownloadFailedLabel: string) {
       });
       setInstallState(initialInstallState);
     };
-    const updateCheckTimer = window.setTimeout(() => {
-      void window.ipcRenderer.checkAppUpdate(false).then((result) => {
-        if (result?.hasUpdate && result.notice) {
-          if (!shouldShowAppUpdateNotice(result.notice)) return;
-          markAppUpdateNoticeShown(result.notice);
-          setUpdateNotice(result.notice);
+    // 后台静默检测：启动 15 秒后首次检查，之后每 30 分钟复查一次；
+    // 后端统一按 6 小时节流，且只认本仓库正式 Release。发现新版本会通过
+    // app:update-available 事件弹出上方 handleUpdateNotice 弹窗。
+    const SILENT_CHECK_INITIAL_DELAY_MS = 15_000;
+    const SILENT_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+    const scheduleSilentUpdateCheck = () => {
+      const initialTimer = window.setTimeout(() => {
+        void window.ipcRenderer.checkAppUpdate(false).catch(() => undefined);
+      }, SILENT_CHECK_INITIAL_DELAY_MS);
+      const intervalTimer = window.setInterval(() => {
+        void window.ipcRenderer.checkAppUpdate(false).catch(() => undefined);
+      }, SILENT_CHECK_INTERVAL_MS);
+      return () => {
+        window.clearTimeout(initialTimer);
+        window.clearInterval(intervalTimer);
+      };
+    };
+
+    // 更新后校验：自动重启后的首次启动会读取 pending 标记，确认已成功升级。
+    const verifyUpdatedOnStartup = () => {
+      void window.ipcRenderer.getAppUpdateStatus().then((status) => {
+        if (status?.updatedTo) {
+          void appAlert(t('layout.updatedTo', { version: status.updatedTo }));
         }
-      }).catch((error) => {
-        console.warn('[AppUpdate] check failed:', error);
-      });
-    }, 1800);
+      }).catch(() => undefined);
+    };
+
     const unsubscribeAppUpdateAvailable = subscribeAppUpdateAvailable(handleUpdateNotice);
     const unsubscribeAppUpdateInstallProgress = subscribeAppUpdateInstallProgress(handleInstallProgress);
     window.addEventListener(SHOW_CURRENT_RELEASE_NOTES_EVENT, handleCurrentReleaseNotes);
+    const cancelSilentCheck = scheduleSilentUpdateCheck();
+    verifyUpdatedOnStartup();
     return () => {
-      window.clearTimeout(updateCheckTimer);
       unsubscribeAppUpdateAvailable();
       unsubscribeAppUpdateInstallProgress();
       window.removeEventListener(SHOW_CURRENT_RELEASE_NOTES_EVENT, handleCurrentReleaseNotes);
+      cancelSilentCheck();
     };
   }, []);
 

@@ -49,7 +49,7 @@ export function validateAudioGenerationRequest(
     config: GenerationValidationConfig,
 ): string | null {
     if (!request.prompt.trim()) return '请先输入要合成的文本';
-    if (!request.voiceId.trim()) return '请先填写 voice_id';
+    if (!request.voiceId.trim()) return '请先选择音色';
     if (!config.hasVoiceConfig) return '未检测到声音合成配置，请先在设置中补齐';
     if (config.audioVoiceIdsForModel && !config.audioVoiceIdsForModel.includes(request.voiceId.trim())) {
         return '当前音色不属于所选 TTS 模型，请重新选择匹配的音色';

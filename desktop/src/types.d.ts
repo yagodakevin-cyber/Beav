@@ -1806,6 +1806,8 @@ declare global {
       getAppVersion: () => Promise<string>;
       checkAppUpdate: (force?: boolean) => Promise<{ success: boolean; hasUpdate: boolean; throttled?: boolean; inFlight?: boolean; message?: string; notice?: { currentVersion: string; latestVersion: string; htmlUrl: string; name: string; publishedAt: string; body: string; installable?: boolean } }>;
       installAppUpdate: () => Promise<{ success: boolean; installed?: boolean; hasUpdate?: boolean; inFlight?: boolean; error?: string }>;
+      getAppUpdateStatus: () => Promise<{ currentVersion: string; updatedTo?: string | null; pendingTarget?: string | null; backupVersion?: string | null; canRollback?: boolean; installable?: boolean }>;
+      rollbackAppUpdate: () => Promise<{ success: boolean; version?: string; error?: string }>;
       onAppUpdateAvailable: (listener: (...args: unknown[]) => void) => void;
       offAppUpdateAvailable: (listener: (...args: unknown[]) => void) => void;
       onAppUpdateInstallProgress: (listener: (...args: unknown[]) => void) => void;

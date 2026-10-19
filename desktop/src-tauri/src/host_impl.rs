@@ -1590,7 +1590,7 @@ mod tests {
             &json!({
                 "action": "voice.speech",
                 "payload": {
-                    "model": "cosyvoice-v3.5-plus",
+                    "model": "doubao-seed-tts-2.0",
                     "voiceId": "voice_demo"
                 }
             }),

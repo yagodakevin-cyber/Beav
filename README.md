@@ -16,8 +16,8 @@
 
 <p align="center">
   <!-- release-stats:start -->
-  <a href="https://github.com/Jamailar/Beav/releases"><img src="https://img.shields.io/badge/%E5%B7%B2%E5%8F%91%E5%B8%83%20Release-86%20%E4%B8%AA-2563EB?style=flat-square&amp;labelColor=1D4ED8" alt="已发布 86 个 Release 版本"></a>
-  <a href="https://github.com/Jamailar/Beav/releases"><img src="https://img.shields.io/badge/%E7%B4%AF%E8%AE%A1%E5%AE%89%E8%A3%85%E5%8C%85-684%20%E4%B8%AA-14B8A6?style=flat-square&amp;labelColor=0F766E" alt="累计 684 个安装包"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases"><img src="https://img.shields.io/github/v/release/yagodakevin-cyber/Beav?style=flat-square&amp;labelColor=1D4ED8" alt="Latest Release"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases"><img src="https://img.shields.io/github/downloads/yagodakevin-cyber/Beav/total?style=flat-square&amp;labelColor=0F766E" alt="Total Downloads"></a>
   <!-- release-stats:end -->
 </p>
 
@@ -26,10 +26,10 @@
 <p align="center">本地优先 · 账号长期记忆 · AI 图片与视频剪辑 · macOS / Windows / Linux</p>
 
 <p align="center">
-  <a href="https://github.com/Jamailar/Beav/releases/latest"><img src="https://img.shields.io/github/v/release/Jamailar/Beav?style=flat-square&color=C56F2C" alt="Latest Release"></a>
-  <a href="https://github.com/Jamailar/Beav"><img src="https://img.shields.io/github/stars/Jamailar/Beav?style=flat-square&color=C56F2C" alt="GitHub Stars"></a>
-  <a href="https://github.com/Jamailar/Beav/releases"><img src="https://img.shields.io/github/downloads/Jamailar/Beav/total?style=flat-square&color=C56F2C" alt="Total Downloads"></a>
-  <a href="https://github.com/Jamailar/Beav/releases/latest"><img src="https://img.shields.io/github/release-date/Jamailar/Beav?style=flat-square&color=6C757D" alt="Release Date"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases/latest"><img src="https://img.shields.io/github/v/release/yagodakevin-cyber/Beav?style=flat-square&color=C56F2C" alt="Latest Release"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav"><img src="https://img.shields.io/github/stars/yagodakevin-cyber/Beav?style=flat-square&color=C56F2C" alt="GitHub Stars"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases"><img src="https://img.shields.io/github/downloads/yagodakevin-cyber/Beav/total?style=flat-square&color=C56F2C" alt="Total Downloads"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases/latest"><img src="https://img.shields.io/github/release-date/yagodakevin-cyber/Beav?style=flat-square&color=6C757D" alt="Release Date"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT--NC-6C757D?style=flat-square" alt="License"></a>
   <a href="https://beav.pro/download"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-6C757D?style=flat-square" alt="Platform"></a>
 </p>
@@ -176,14 +176,14 @@ Beav 因此而生：把 AI 变成自媒体工作者真正可持续使用的素�
 
 ### 评论区洞察
 
-![评论区洞察](https://github.com/Jamailar/Beav/releases/download/v2.3.0/redbox-2.3.0-comment-insights.png)
+- 评论区洞察：按评论区聚合分析热点与观众情绪，辅助选题与内容复盘。
 
 ## 快速开始
 
 1. 前往 [下载页](https://beav.pro/download) 安装 Beav。
 2. 为一个账号或品牌创建一个工作空间。
 3. 在 `设置 → AI` 使用官方 AI，或配置自己的 Endpoint、API Key 和模型。
-4. 如需网页采集，从 [最新 Release](https://github.com/Jamailar/Beav/releases/latest) 获取 Chrome / Edge 扩展。
+4. 如需网页采集，从 [最新 Release](https://github.com/yagodakevin-cyber/Beav/releases/latest) 获取 Chrome / Edge 扩展。
 5. 从主页选题或日报开始创作；已有视频可进入媒体工坊进行剪辑，图片处理和账号规划从主页小工具打开。
 
 不确定某个功能怎么用时，可在对话中让 Beav 查询内置使用指南，再按当前版本的入口操作。
@@ -193,7 +193,7 @@ Beav 因此而生：把 AI 变成自媒体工作者真正可持续使用的素�
 - **本地优先**：素材、稿件和项目以本地工作空间为核心组织。
 - **模型可选**：支持官方 AI 和 OpenAI-compatible 模型服务。
 - **发布透明**：安装包、扩展、更新资产和签名均通过 GitHub Releases 发布。
-- **边界公开**：许可证、[更新日志](./CHANGELOG.md)、[路线图](./ROADMAP.md) 和 [Issues](https://github.com/Jamailar/Beav/issues) 均可查。
+- **边界公开**：许可证、[更新日志](./CHANGELOG.md)、[路线图](./ROADMAP.md) 和 [Issues](https://github.com/yagodakevin-cyber/Beav/issues) 均可查。
 
 ## Agent 插件
 
@@ -218,8 +218,8 @@ Read https://beav.pro/workbuddy to install the Beav Creator plugin and connect i
 ## 社区
 
 - [官网与下载](https://beav.pro/)
-- [GitHub Releases](https://github.com/Jamailar/Beav/releases)
-- [问题反馈](https://github.com/Jamailar/Beav/issues)
+- [GitHub Releases](https://github.com/yagodakevin-cyber/Beav/releases)
+- [问题反馈](https://github.com/yagodakevin-cyber/Beav/issues)
 - [Bilibili 视频教程](https://www.bilibili.com/video/BV12LNn6nEem/)
 
 Beav 由 [JambaHailar](https://x.com/JambaHailar) 独立开发和维护。

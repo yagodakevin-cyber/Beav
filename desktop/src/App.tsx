@@ -36,7 +36,7 @@ const WanderPage = lazy(async () => ({ default: (await import('./pages/Wander'))
 const RedClawPage = lazy(async () => ({ default: (await import('./pages/RedClaw')).RedClaw }));
 const MediaLibraryPage = lazy(async () => ({ default: (await import('./pages/MediaLibrary')).MediaLibrary }));
 const CoverStudioPage = lazy(async () => ({ default: (await import('./pages/CoverStudio')).CoverStudio }));
-const GenerationStudioPage = lazy(async () => ({ default: (await import('./pages/GenerationStudio')).GenerationStudio }));
+const ToolboxPage = lazy(async () => ({ default: (await import('./pages/toolbox/Toolbox')).Toolbox }));
 const SubjectsPage = lazy(async () => ({ default: (await import('./pages/Subjects')).Subjects }));
 const AutomationPage = lazy(async () => ({ default: (await import('./pages/Automation')).Automation }));
 const ApprovalPage = lazy(async () => ({ default: (await import('./pages/Approval')).Approval }));
@@ -317,7 +317,7 @@ function AuthenticatedApp({ onOpenAppOnboarding }: { onOpenAppOnboarding: () => 
         {shouldRenderView(mountedViews, currentView, persistentViews, 'generation-studio') && (
           <div className={currentView === 'generation-studio' ? 'h-full min-h-0 flex flex-col' : 'hidden'}>
             <Suspense fallback={currentView === 'generation-studio' ? <ViewLoadingFallback /> : null}>
-              <GenerationStudioPage
+              <ToolboxPage
                 isActive={currentView === 'generation-studio' || persistentViews.has('generation-studio')}
                 pendingIntent={pendingGenerationIntent}
                 onIntentConsumed={clearPendingGenerationIntent}
@@ -408,41 +408,14 @@ function App() {
     }
   }, []);
 
-  if (officialAuthPending) {
-    return (
-      <>
-        <OfficialLoginGate mode="checking" />
-        <AppOnboarding open={appOnboardingOpen} onClose={closeAppOnboarding} />
-      </>
-    );
-  }
-
-  if (officialAuthNeedsLogin) {
-    return (
-      <>
-        <OfficialLoginGate mode={officialAuthStatus === 'reauthRequired' ? 'expired' : 'login'} />
-        <AppOnboarding open={appOnboardingOpen} onClose={closeAppOnboarding} />
-      </>
-    );
-  }
-
-  if (llmReadinessPending) {
-    return (
-      <>
-        <OfficialLoginGate mode="checking" />
-        <AppOnboarding open={appOnboardingOpen} onClose={closeAppOnboarding} />
-      </>
-    );
-  }
-
-  if (!llmReadinessState?.ready) {
-    return (
-      <>
-        <OfficialLoginGate mode={officialAuthStatus === 'reauthRequired' ? 'expired' : 'login'} />
-        <AppOnboarding open={appOnboardingOpen} onClose={closeAppOnboarding} />
-      </>
-    );
-  }
+  // 演绎版：官方账号登录墙已拆除——本地构建无需登录官方账号即可进入主界面。
+  // 原四道门（officialAuthPending / officialAuthNeedsLogin / llmReadinessPending / !llmReadinessState.ready）
+  // 均强制渲染 <OfficialLoginGate/>，现直接放行；
+  // officialAuthLoggedIn / officialAuthStatus 仍保留，供官方 AI 能力判定使用。
+  void officialAuthPending;
+  void officialAuthNeedsLogin;
+  void llmReadinessPending;
+  void llmReadinessState;
 
   return (
     <>

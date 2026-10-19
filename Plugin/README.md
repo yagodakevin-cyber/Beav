@@ -146,4 +146,4 @@ pnpm package
 - 插件负责采集、下载、导出、提交结构化数据，以及为桌面端 AI 暴露浏览器控制 MCP 工具；AI 编排和业务决策仍在桌面端完成。
 - `captureRuntime.js` 是平台无关的页面采集底座；平台逻辑应只提供根节点、列表项、字段解析和分页策略，不要把滚动等待、DOM 稳定判断、验证页识别重复写进各个平台 extractor。采集 checkpoint 存在 `redboxCaptureCheckpoints`，用于排查页面刷新、断网或站点限流导致的中断。
 - 知识整理、漫步、RedClaw 创作仍在桌面端完成。
-- 自动更新检查会在插件安装、浏览器启动和后台定时任务中执行；更新源固定为 `https://redbox.ziz.hk/api/updates/plugin`。
+- 自动更新检查会在插件安装、浏览器启动和后台定时任务中执行；更新源固定为本仓库 `yagodakevin-cyber/Beav` 的 GitHub Releases（仅正式 Release）。

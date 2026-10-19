@@ -224,6 +224,27 @@ pub(crate) fn run_setup_restore_sequence(
     }
     let _ = app.emit("indexing:status", default_indexing_stats());
     let state = app.state::<AppState>();
+    // 工作区内的生成产物（音频/图片/视频）需要通过 asset 协议回给前端播放，
+    // 静态 scope 只覆盖 AppData 等默认目录，这里把当前工作区根动态加入白名单。
+    {
+        let workspace_root = state.workspace_root_cache.lock().ok().map(|guard| guard.clone());
+        if let Some(root) = workspace_root.filter(|root| root.as_path().exists()) {
+            if let Err(error) = app
+                .asset_protocol_scope()
+                .allow_directory(&root, true)
+            {
+                logging::emit_legacy_line(
+                    logging::event::LogSource::Host,
+                    logging::event::LogLevel::Warn,
+                    "startup",
+                    "startup.asset_scope_allow_workspace_failed",
+                    format!("[{} startup] failed to allow workspace root in asset scope: {error}", app_brand_display_name()),
+                    json!({ "error": error.to_string() }),
+                    None,
+                );
+            }
+        }
+    }
     if let Ok(Some(report)) = logging::create_startup_recovery_report_if_needed(&state) {
         let uploaded = logging::upload_report_if_allowed(&state, &report.id)
             .ok()

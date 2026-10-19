@@ -22,9 +22,27 @@ use crate::{
     subjects_root, workspace_root, AppState, MediaAssetRecord, SubjectRecord,
 };
 
-const COSYVOICE_TTS_MODEL: &str = "cosyvoice-v3.5-plus";
-const COSYVOICE_CLONE_MODEL: &str = "cosyvoice-v3.5-plus-voice-clone";
-const MINIMAX_SYSTEM_VOICES_JSON: &str = include_str!("../resources/minimax-system-voices.json");
+const ADAPTER_SYSTEM_VOICES_JSON: &str = include_str!("../resources/adapter-system-voices.json");
+
+/// 火山引擎豆包 TTS 2.0（官方网关 `volc-speech-tts` 通道）。
+const DOUBAO_TTS_MODEL: &str = "doubao-seed-tts-2.0";
+/// 豆包适配通道 CosyVoice 3.5 Flash（官方 `dashscope-cosyvoice-tts` 通道）。
+const COSYVOICE_TTS_MODEL: &str = "cosyvoice-v3.5-flash";
+const COSYVOICE_CLONE_MODEL: &str = "cosyvoice-v3.5-flash-voice-clone";
+/// 豆包适配通道在官方网关模型注册表中的通道模型 ID：网关 /models 仅注册
+/// `qwen-audio-3.1-tts-flash`（api_type=dashscope-cosyvoice-tts），应用层模型名
+/// 保持用户指定的 `cosyvoice-v3.5-flash`，仅在构造网关请求体时做通道映射。
+const GATEWAY_COSYVOICE_CHANNEL_MODEL: &str = "qwen-audio-3.1-tts-flash";
+/// 默认音色占位 ID 映射为空串（通道默认音色）；真实音色 ID（豆包官方
+/// uranus 2.0 系列 / 百炼复刻音色）原样透传。旧版 1.0 系列音色 ID
+/// （mars/moon bigtts，网关已拒绝）一并归一为默认音色，保证存量角色
+/// 配置无需迁移即可继续合成。
+const ADAPTER_SYSTEM_VOICE_IDS: &[&str] = &[
+    "volc-tts-default",
+    "cosyvoice-tts-default",
+    "zh_female_cancan_mars_bigtts",
+    "zh_female_wanwanxiaohe_moon_bigtts",
+];
 
 #[derive(Debug, Clone)]
 struct VoiceGatewayConfig {
@@ -59,17 +77,28 @@ fn is_cosyvoice_model(model: &str) -> bool {
     normalized_model_key(model).contains("cosyvoice")
 }
 
-fn is_minimax_tts_model(model: &str) -> bool {
-    let key = normalized_model_key(model);
-    key.contains("minimax") || key.starts_with("speech-") || key.starts_with("speech_")
+/// 网关通道模型映射：应用层模型名不变，适配通道模型在网关侧用注册 ID 发请求。
+fn gateway_tts_model(model: &str) -> String {
+    if is_cosyvoice_model(model) {
+        GATEWAY_COSYVOICE_CHANNEL_MODEL.to_string()
+    } else {
+        model.trim().to_string()
+    }
 }
 
-fn tts_model_supports_prompt(model: &str) -> bool {
-    is_cosyvoice_model(model) || !is_minimax_tts_model(model)
+/// 适配层系统音色占位 ID 映射为通道默认音色（网关请求 voice_id 传空串）。
+fn wire_voice_id(voice_id: &str) -> String {
+    let trimmed = voice_id.trim();
+    if trimmed.is_empty() || ADAPTER_SYSTEM_VOICE_IDS.contains(&trimmed) {
+        String::new()
+    } else {
+        trimmed.to_string()
+    }
 }
 
+/// CosyVoice 走 SSML/`<speak>` 参数，不接受 MiniMax 式 `emotion`；火山豆包 TTS 2.0 支持 `emotion`。
 fn tts_model_supports_emotion(model: &str) -> bool {
-    is_minimax_tts_model(model) || !is_cosyvoice_model(model)
+    !is_cosyvoice_model(model)
 }
 
 fn extract_xml_tag_names(input: &str) -> Vec<String> {
@@ -167,6 +196,7 @@ fn validate_cosyvoice_speak_tags(input: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// CosyVoice 3.5 Flash 官方规范：只接受 `<speak>` 家族标签，语速/语调为 0.5-2.0 倍数，音量 0-100。
 fn validate_cosyvoice_speech_input(model: &str, input: &str) -> Result<(), String> {
     if !is_cosyvoice_model(model) {
         return Ok(());
@@ -216,16 +246,59 @@ fn validate_cosyvoice_speech_input(model: &str, input: &str) -> Result<(), Strin
     validate_cosyvoice_speak_tags(input)
 }
 
+/// 采样率/音频格式与两个通道各自的官方取值对齐。
+fn validate_speech_audio_params(payload: &Value, model: &str) -> Result<(), String> {
+    let sample_rates: &[i64] = if is_cosyvoice_model(model) {
+        &[8000, 16000, 22050, 24000, 44100, 48000]
+    } else {
+        &[8000, 16000, 22050, 24000, 32000, 44100, 48000]
+    };
+    if let Some(raw) = payload_field_alias(payload, &["sample_rate", "sampleRate"]) {
+        let value = raw
+            .as_i64()
+            .or_else(|| raw.as_str().and_then(|text| text.trim().parse::<i64>().ok()))
+            .ok_or_else(|| "voice.speech sample_rate must be an integer".to_string())?;
+        if !sample_rates.contains(&value) {
+            return Err(format!(
+                "voice.speech sample_rate {value} is not supported by model {model}; use one of {}",
+                sample_rates
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
+    }
+    let formats: &[&str] = if is_cosyvoice_model(model) {
+        &["mp3", "wav", "pcm", "opus", "ogg_opus"]
+    } else {
+        &["mp3", "wav", "pcm", "ogg_opus", "opus"]
+    };
+    if let Some(raw) = payload_field_alias(payload, &["format"]) {
+        if let Some(value) = raw.as_str().map(|text| text.trim().to_ascii_lowercase()) {
+            if !value.is_empty() && !formats.contains(&value.as_str()) {
+                return Err(format!(
+                    "voice.speech format `{value}` is not supported by model {model}; use one of {}",
+                    formats.join(", ")
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 fn clone_model_target_tts_model(clone_model: &str, fallback_tts_model: &str) -> String {
     let clone_key = normalized_model_key(clone_model);
-    if clone_key == COSYVOICE_CLONE_MODEL {
+    if clone_key == COSYVOICE_CLONE_MODEL || clone_key.contains("cosyvoice") {
         return COSYVOICE_TTS_MODEL.to_string();
     }
     if clone_key.ends_with("-voice-clone") {
-        return clone_key.trim_end_matches("-voice-clone").to_string();
-    }
-    if clone_key.contains("cosyvoice") {
-        return COSYVOICE_TTS_MODEL.to_string();
+        let target = clone_key.trim_end_matches("-voice-clone").to_string();
+        return if target == "doubao" {
+            DOUBAO_TTS_MODEL.to_string()
+        } else {
+            target
+        };
     }
     fallback_tts_model.trim().to_string()
 }
@@ -454,8 +527,6 @@ fn enrich_cloned_voice_metadata(
         object.insert("provider".to_string(), json!(provider));
     } else if is_cosyvoice_model(clone_model) || is_cosyvoice_model(target_tts_model) {
         object.insert("provider".to_string(), json!("cosyvoice"));
-    } else if is_minimax_tts_model(target_tts_model) {
-        object.insert("provider".to_string(), json!("minimax"));
     }
 }
 
@@ -495,11 +566,6 @@ fn voice_matches_selected_tts_model(value: &Value, selected_tts_model: &str) -> 
     let model = selected_tts_model.trim();
     if model.is_empty() {
         return true;
-    }
-    if payload_bool_alias(value, &["systemVoice", "system_voice"]).unwrap_or(false)
-        || payload_string(value, "source").as_deref() == Some("system")
-    {
-        return is_minimax_tts_model(model);
     }
     if voice_target_tts_model(value).is_some() {
         return voice_mapping_matches_model(value, model);
@@ -560,8 +626,10 @@ fn voice_list_items_from_value(value: &Value) -> Vec<Value> {
     Vec::new()
 }
 
-fn minimax_system_voice_list_items() -> Vec<Value> {
-    let Ok(catalog) = serde_json::from_str::<Value>(MINIMAX_SYSTEM_VOICES_JSON) else {
+/// 适配层双通道内置音色（豆包），替代官方 327 条注入。
+/// 注意：不携带 systemVoice/source:"system" 标记，provider 标记为 adapter。
+fn adapter_system_voice_list_items() -> Vec<Value> {
+    let Ok(catalog) = serde_json::from_str::<Value>(ADAPTER_SYSTEM_VOICES_JSON) else {
         return Vec::new();
     };
     let Some(items) = catalog.get("voices").and_then(Value::as_array) else {
@@ -571,11 +639,13 @@ fn minimax_system_voice_list_items() -> Vec<Value> {
         .iter()
         .filter_map(|item| {
             let voice_id = payload_string(item, "voice_id")?;
-            let voice_name = payload_string(item, "voice_name").unwrap_or_else(|| voice_id.clone());
-            let language_boost = payload_string(item, "language_boost").unwrap_or_default();
+            let voice_name = payload_string(item, "name").unwrap_or_else(|| voice_id.clone());
             let language_zh = payload_string(item, "language_zh").unwrap_or_default();
-            let language_en = payload_string(item, "language_en").unwrap_or_default();
             let gender_hint = payload_string(item, "gender_hint").unwrap_or_default();
+            let supported_models = item
+                .get("supportedModels")
+                .cloned()
+                .unwrap_or_else(|| json!([]));
             Some(json!({
                 "id": voice_id,
                 "value": voice_id,
@@ -584,16 +654,11 @@ fn minimax_system_voice_list_items() -> Vec<Value> {
                 "name": voice_name,
                 "title": voice_name,
                 "status": "ready",
-                "source": "system",
-                "provider": "minimax",
-                "systemVoice": true,
-                "language": language_boost,
-                "languageBoost": language_boost,
-                "language_boost": language_boost,
+                "source": "adapter",
+                "provider": "adapter",
+                "supportedModels": supported_models,
                 "languageZh": language_zh,
                 "language_zh": language_zh,
-                "languageEn": language_en,
-                "language_en": language_en,
                 "genderHint": gender_hint,
                 "gender_hint": gender_hint,
             }))
@@ -601,25 +666,84 @@ fn minimax_system_voice_list_items() -> Vec<Value> {
         .collect()
 }
 
-fn is_minimax_system_voice_id(voice_id: &str) -> bool {
-    let normalized = voice_id.trim();
-    if normalized.is_empty() {
-        return false;
-    }
-    minimax_system_voice_list_items().iter().any(|item| {
-        voice_list_item_id(item)
-            .map(|id| id == normalized)
-            .unwrap_or(false)
-    })
-}
-
-fn append_minimax_system_voices(voices: &mut Vec<Value>, seen: &mut HashSet<String>) {
-    for item in minimax_system_voice_list_items() {
+/// 只有当前所选 TTS 模型命中的适配层音色才会注入，避免出现“暂无音色”。
+fn append_adapter_system_voices(
+    voices: &mut Vec<Value>,
+    seen: &mut HashSet<String>,
+    selected_tts_model: &str,
+) {
+    for item in adapter_system_voice_list_items() {
+        if !voice_matches_selected_tts_model(&item, selected_tts_model) {
+            continue;
+        }
         if let Some(id) = voice_list_item_id(&item) {
             if seen.insert(id) {
                 voices.push(item);
             }
         }
+    }
+}
+
+/// 用户在设置页手动添加的百炼复刻音色 ID（settings.bailian_custom_voices_json，
+/// 数组元素形如 {"id":"cosyvoice-v3.5-flash-bailian-<hex>","name":"备注"}）。
+fn append_bailian_custom_voices(
+    voices: &mut Vec<Value>,
+    seen: &mut HashSet<String>,
+    settings: &Value,
+) {
+    let parsed = settings
+        .get("bailian_custom_voices_json")
+        .and_then(Value::as_str)
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .unwrap_or(Value::Null);
+    let Some(items) = parsed.as_array() else {
+        return;
+    };
+    for item in items {
+        let Some(voice_id) = item
+            .get("id")
+            .or_else(|| item.get("voiceId"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        if !seen.insert(voice_id.to_string()) {
+            continue;
+        }
+        let name = item
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToString::to_string)
+            .unwrap_or_else(|| {
+                let tail: String = voice_id
+                    .chars()
+                    .rev()
+                    .take(6)
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev()
+                    .collect();
+                format!("自定义复刻音色 · {tail}")
+            });
+        voices.push(json!({
+            "id": voice_id,
+            "value": voice_id,
+            "voiceId": voice_id,
+            "voice_id": voice_id,
+            "name": name,
+            "title": name,
+            "status": "ready",
+            "provider": "custom",
+            "source": "custom",
+            "language": "中文 (普通话)",
+            "languageZh": "中文 (普通话)",
+            "language_zh": "中文 (普通话)",
+            "supportedModels": ["cosyvoice-v3.5-flash"],
+        }));
     }
 }
 
@@ -651,12 +775,7 @@ fn subject_voice_list_items(
             }
         }
 
-        let include_legacy = selected
-            .map(|model| {
-                voice_mapping_matches_model(voice, model)
-                    || (voice_target_tts_model(voice).is_none() && is_minimax_tts_model(model))
-            })
-            .unwrap_or(true);
+        let include_legacy = selected.map(|model| voice_mapping_matches_model(voice, model)).unwrap_or(true);
         if include_legacy {
             if let Some(item) = subject_voice_list_item(subject, voice) {
                 if items
@@ -767,9 +886,7 @@ fn subject_voice_id_for_tts_model(record: &SubjectRecord, tts_model: &str) -> Op
             }
         }
     }
-    if voice_mapping_matches_model(voice, tts_model)
-        || (voice_target_tts_model(voice).is_none() && is_minimax_tts_model(tts_model))
-    {
+    if voice_mapping_matches_model(voice, tts_model) {
         return payload_string_alias(voice, &["voiceId", "voice_id"]);
     }
     None
@@ -1416,23 +1533,27 @@ pub(crate) fn list_voices(state: &State<'_, AppState>, payload: &Value) -> Resul
         }
     };
 
+    let mut selected_tts_model = requested_model.clone().unwrap_or_default();
     let config = match resolve_voice_config(state, Some(payload)) {
         Ok(config) => config,
         Err(error) => {
-            if requested_model
-                .as_deref()
-                .map(is_minimax_tts_model)
-                .unwrap_or(true)
-            {
-                append_minimax_system_voices(&mut voices, &mut seen);
-            }
+            append_adapter_system_voices(&mut voices, &mut seen, &selected_tts_model);
             return Ok(json!({ "success": true, "voices": voices, "configError": error }));
         }
     };
-    let selected_tts_model = requested_model
-        .clone()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| config.tts_model.clone());
+    if selected_tts_model.trim().is_empty() {
+        selected_tts_model = config.tts_model.clone();
+    }
+    // 百炼直连就绪时跳过网关远程列表：网关 cosyvoice 通道未注册该模型，
+    // 固定音色列表由本地适配层数据（adapter-system-voices.json）注入。
+    if is_cosyvoice_model(&selected_tts_model) {
+        let settings = with_store(state, |store| Ok(settings_store::settings_snapshot(&store)))?;
+        if crate::dashscope_tts::resolve_bailian_config(&settings).is_some() {
+            append_adapter_system_voices(&mut voices, &mut seen, &selected_tts_model);
+            append_bailian_custom_voices(&mut voices, &mut seen, &settings);
+            return Ok(json!({ "success": true, "voices": voices }));
+        }
+    }
     let client = Client::builder()
         .timeout(Duration::from_secs(45))
         .build()
@@ -1448,9 +1569,7 @@ pub(crate) fn list_voices(state: &State<'_, AppState>, payload: &Value) -> Resul
     {
         Ok(response) => response,
         Err(error) => {
-            if is_minimax_tts_model(&selected_tts_model) {
-                append_minimax_system_voices(&mut voices, &mut seen);
-            }
+            append_adapter_system_voices(&mut voices, &mut seen, &selected_tts_model);
             return Ok(json!({
                 "success": true,
                 "voices": voices,
@@ -1461,9 +1580,7 @@ pub(crate) fn list_voices(state: &State<'_, AppState>, payload: &Value) -> Resul
     let status = response.status();
     let body = response.text().map_err(|error| error.to_string())?;
     if !status.is_success() {
-        if is_minimax_tts_model(&selected_tts_model) {
-            append_minimax_system_voices(&mut voices, &mut seen);
-        }
+        append_adapter_system_voices(&mut voices, &mut seen, &selected_tts_model);
         return Ok(json!({
             "success": true,
             "voices": voices,
@@ -1483,9 +1600,7 @@ pub(crate) fn list_voices(state: &State<'_, AppState>, payload: &Value) -> Resul
             item,
         );
     }
-    if is_minimax_tts_model(&selected_tts_model) {
-        append_minimax_system_voices(&mut voices, &mut seen);
-    }
+    append_adapter_system_voices(&mut voices, &mut seen, &selected_tts_model);
     Ok(json!({ "success": true, "voices": voices, "raw": parsed }))
 }
 
@@ -1625,6 +1740,24 @@ fn speech_pitch(payload: &Value) -> Result<Option<i64>, String> {
     Ok(pitch)
 }
 
+/// 火山豆包 TTS 2.0 用整数半音（-12~12）；CosyVoice 3.5 Flash 官方用 0.5~2.0 的倍数。
+fn speech_pitch_for_model(payload: &Value, model: &str) -> Result<Option<Value>, String> {
+    if is_cosyvoice_model(model) {
+        let pitch = payload_f64_alias(payload, &["pitch"])
+            .or_else(|| nested_payload_f64_alias(payload, "voice_setting", &["pitch"]));
+        if let Some(value) = pitch {
+            if !(0.5..=2.0).contains(&value) {
+                return Err(
+                    "CosyVoice 语调 pitch 必须是 0.5 到 2.0 之间的倍数（官方规范）".to_string(),
+                );
+            }
+            return Ok(Some(json!(value)));
+        }
+        return Ok(None);
+    }
+    Ok(speech_pitch(payload)?.map(|value| json!(value)))
+}
+
 fn speech_emotion(payload: &Value) -> Result<Option<String>, String> {
     let emotion = payload_string(payload, "emotion")
         .or_else(|| nested_payload_string_alias(payload, "voice_setting", &["emotion"]))
@@ -1667,22 +1800,20 @@ fn build_speech_request_body(
     response_format: String,
 ) -> Result<Map<String, Value>, String> {
     let mut body = Map::new();
-    let supports_prompt = tts_model_supports_prompt(&model);
     let supports_emotion = tts_model_supports_emotion(&model);
     validate_cosyvoice_speech_input(&model, &input)?;
-    body.insert("model".to_string(), json!(model.clone()));
+    validate_speech_audio_params(payload, &model)?;
+    body.insert("model".to_string(), json!(gateway_tts_model(&model)));
     body.insert("input".to_string(), json!(input));
-    body.insert("voice_id".to_string(), json!(voice_id.clone()));
+    body.insert("voice_id".to_string(), json!(wire_voice_id(&voice_id)));
     body.insert("response_format".to_string(), json!(response_format));
     body.insert("return_audio_binary".to_string(), json!(true));
 
-    if supports_prompt {
-        if let Some(prompt) =
-            payload_string_alias(payload, &["prompt", "stylePrompt", "style_prompt"])
-                .filter(|value| !value.trim().is_empty())
-        {
-            body.insert("prompt".to_string(), json!(prompt));
-        }
+    if let Some(prompt) =
+        payload_string_alias(payload, &["prompt", "stylePrompt", "style_prompt"])
+            .filter(|value| !value.trim().is_empty())
+    {
+        body.insert("prompt".to_string(), json!(prompt));
     }
     if let Some(language_hints) = payload_field_alias(payload, &["language_hints", "languageHints"])
     {
@@ -1691,8 +1822,8 @@ fn build_speech_request_body(
     if let Some(speed) = speech_speed(payload)? {
         body.insert("speed".to_string(), json!(speed));
     }
-    if let Some(pitch) = speech_pitch(payload)? {
-        body.insert("pitch".to_string(), json!(pitch));
+    if let Some(pitch) = speech_pitch_for_model(payload, &model)? {
+        body.insert("pitch".to_string(), pitch);
     }
     if supports_emotion {
         if let Some(emotion) = speech_emotion(payload)? {
@@ -1734,12 +1865,9 @@ fn build_speech_request_body(
         .filter(|object| !object.is_empty())
     {
         let mut merged = voice_setting.clone();
-        if !supports_emotion {
-            merged.remove("emotion");
-        }
         merged
             .entry("voice_id".to_string())
-            .or_insert_with(|| json!(voice_id));
+            .or_insert_with(|| json!(wire_voice_id(&voice_id)));
         body.insert("voice_setting".to_string(), Value::Object(merged));
     }
 
@@ -1930,38 +2058,53 @@ fn synthesize_speech_inner(
         model.clone(),
         response_format.clone(),
     )?;
-    let url = gateway_url(&config, "/audio/speech");
-    let request_body = Value::Object(body);
+    let bailian_config = if is_cosyvoice_model(&model) {
+        let settings = with_store(state, |store| Ok(settings_store::settings_snapshot(&store)))?;
+        crate::dashscope_tts::resolve_bailian_config(&settings)
+    } else {
+        None
+    };
+    let (audio_bytes, extension) = match bailian_config.as_ref() {
+        Some(bailian) => {
+            // 百炼专属端点直连：官方网关 cosyvoice 通道绑定固定默认音色，
+            // 不透传百炼复刻音色，改走 DashScope WebSocket 协议联合成。
+            let bytes = crate::dashscope_tts::synthesize(bailian, &model, &voice_id, &input)?;
+            (bytes, response_format.as_str().to_string())
+        }
+        None => {
+            let url = gateway_url(&config, "/audio/speech");
+            let request_body = Value::Object(body);
 
-    let client = Client::builder()
-        .timeout(Duration::from_secs(180))
-        .build()
-        .map_err(|error| error.to_string())?;
-    let response = authorized_request(
-        &client,
-        reqwest::Method::POST,
-        &url,
-        config.api_key.as_deref(),
-    )
-    .json(&request_body)
-    .send()
-    .map_err(|error| error.to_string())?;
-    let status = response.status();
-    let content_type = response
-        .headers()
-        .get(reqwest::header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .map(ToString::to_string);
-    let bytes = response
-        .bytes()
-        .map_err(|error| error.to_string())?
-        .to_vec();
-    if !status.is_success() {
-        let text = String::from_utf8_lossy(&bytes);
-        return Err(format!("voice speech failed with HTTP {status}: {text}"));
-    }
-    let (audio_bytes, extension) =
-        decode_audio_response(content_type.as_deref(), bytes, response_format.as_str())?;
+            let client = Client::builder()
+                .timeout(Duration::from_secs(180))
+                .build()
+                .map_err(|error| error.to_string())?;
+            let response = authorized_request(
+                &client,
+                reqwest::Method::POST,
+                &url,
+                config.api_key.as_deref(),
+            )
+            .json(&request_body)
+            .send()
+            .map_err(|error| error.to_string())?;
+            let status = response.status();
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|value| value.to_str().ok())
+                .map(ToString::to_string);
+            let bytes = response
+                .bytes()
+                .map_err(|error| error.to_string())?
+                .to_vec();
+            if !status.is_success() {
+                let text = String::from_utf8_lossy(&bytes);
+                return Err(format!("voice speech failed with HTTP {status}: {text}"));
+            }
+            decode_audio_response(content_type.as_deref(), bytes, response_format.as_str())?
+        }
+    };
     let title = payload_string(payload, "title").unwrap_or_else(|| {
         let stem = input.chars().take(24).collect::<String>();
         if stem.trim().is_empty() {
@@ -2025,11 +2168,6 @@ fn validate_speech_voice_for_model(
     voice_id: &str,
     model: &str,
 ) -> Result<(), String> {
-    if is_cosyvoice_model(model) && is_minimax_system_voice_id(voice_id) {
-        return Err(
-            "cosyvoice-v3.5-plus 不支持系统音色，请选择已复刻到 CosyVoice 的音色".to_string(),
-        );
-    }
     ensure_store_hydrated_for_subjects(state)?;
     let subjects = with_store(state, |store| Ok(subject_store::list_subjects(&store)))?;
     for subject in subjects {
@@ -2039,12 +2177,6 @@ fn validate_speech_voice_for_model(
         let legacy_matches = payload_string_alias(voice, &["voiceId", "voice_id"])
             .map(|id| id == voice_id)
             .unwrap_or(false);
-        if legacy_matches && voice_target_tts_model(voice).is_none() && is_cosyvoice_model(model) {
-            return Err(
-                "当前角色音色没有 CosyVoice 映射，请先用 cosyvoice-v3.5-plus-voice-clone 复刻"
-                    .to_string(),
-            );
-        }
         if legacy_matches && voice_mapping_matches_model(voice, model) {
             return Ok(());
         }
@@ -2187,6 +2319,12 @@ fn merge_subject_voice_state(existing: Option<&Value>, voice: &Value) -> Value {
         if let Some(target_tts_model) = voice_target_tts_model(voice) {
             let mapping_key = normalized_model_key(&target_tts_model);
             let mut mapping = source.clone();
+            // 排队阶段 voiceId 可能为 null，不能把空值写进按模型的映射，否则按键读取会拿到假音色。
+            for key in ["voiceId", "voice_id"] {
+                if mapping.get(key).map(Value::is_null).unwrap_or(false) {
+                    mapping.remove(key);
+                }
+            }
             if let Some(voice_id) = payload_string_alias(voice, &["voiceId", "voice_id"]) {
                 mapping.insert("voiceId".to_string(), json!(voice_id.clone()));
                 mapping.insert("voice_id".to_string(), json!(voice_id));
@@ -2384,12 +2522,12 @@ mod tests {
         let existing = json!({
             "voiceId": "voice_old",
             "voice_id": "voice_old",
-            "targetTtsModel": "cosyvoice-v3.5-plus",
+            "targetTtsModel": "cosyvoice-v3.5-flash",
             "voiceMappings": {
-                "cosyvoice-v3.5-plus": {
+                "cosyvoice-v3.5-flash": {
                     "voiceId": "voice_old",
                     "voice_id": "voice_old",
-                    "targetTtsModel": "cosyvoice-v3.5-plus"
+                    "targetTtsModel": "cosyvoice-v3.5-flash"
                 },
                 "speech-2.8-hd": {
                     "voiceId": "voice_minimax",
@@ -2401,9 +2539,9 @@ mod tests {
         let next = json!({
             "voiceId": "voice_new",
             "voice_id": "voice_new",
-            "targetTtsModel": "cosyvoice-v3.5-plus",
-            "target_tts_model": "cosyvoice-v3.5-plus",
-            "ttsModel": "cosyvoice-v3.5-plus",
+            "targetTtsModel": "cosyvoice-v3.5-flash",
+            "target_tts_model": "cosyvoice-v3.5-flash",
+            "ttsModel": "cosyvoice-v3.5-flash",
             "status": "ready"
         });
 
@@ -2415,7 +2553,7 @@ mod tests {
         );
         assert_eq!(
             merged
-                .pointer("/voiceMappings/cosyvoice-v3.5-plus/voiceId")
+                .pointer("/voiceMappings/cosyvoice-v3.5-flash/voiceId")
                 .and_then(Value::as_str),
             Some("voice_new")
         );
@@ -2432,12 +2570,12 @@ mod tests {
         let existing = json!({
             "voiceId": "voice_cosy",
             "voice_id": "voice_cosy",
-            "targetTtsModel": "cosyvoice-v3.5-plus",
+            "targetTtsModel": "cosyvoice-v3.5-flash",
             "voiceMappings": {
-                "cosyvoice-v3.5-plus": {
+                "cosyvoice-v3.5-flash": {
                     "voiceId": "voice_cosy",
                     "voice_id": "voice_cosy",
-                    "targetTtsModel": "cosyvoice-v3.5-plus"
+                    "targetTtsModel": "cosyvoice-v3.5-flash"
                 }
             }
         });
@@ -2455,7 +2593,7 @@ mod tests {
 
         assert_eq!(
             merged
-                .pointer("/voiceMappings/cosyvoice-v3.5-plus/voiceId")
+                .pointer("/voiceMappings/cosyvoice-v3.5-flash/voiceId")
                 .and_then(Value::as_str),
             Some("voice_cosy")
         );
@@ -2474,16 +2612,16 @@ mod tests {
             "voiceId": "voice_legacy",
             "targetTtsModel": "speech-2.8-hd",
             "voiceMappings": {
-                "cosyvoice-v3.5-plus": {
+                "cosyvoice-v3.5-flash": {
                     "voiceId": "voice_cosy",
-                    "targetTtsModel": "cosyvoice-v3.5-plus"
+                    "targetTtsModel": "cosyvoice-v3.5-flash"
                 }
             }
         }))];
 
         assert_eq!(
             tts_model_for_voice_id_from_subjects(&subjects, "voice_cosy").as_deref(),
-            Some("cosyvoice-v3.5-plus")
+            Some("cosyvoice-v3.5-flash")
         );
     }
 
@@ -2492,9 +2630,9 @@ mod tests {
         assert!(voice_matches_selected_tts_model(
             &json!({
                 "voiceId": "voice_cosy",
-                "targetTtsModel": "cosyvoice-v3.5-plus"
+                "targetTtsModel": "cosyvoice-v3.5-flash"
             }),
-            "cosyvoice-v3.5-plus"
+            "cosyvoice-v3.5-flash"
         ));
         assert!(voice_matches_selected_tts_model(
             &json!({
@@ -2506,7 +2644,7 @@ mod tests {
         assert!(!voice_matches_selected_tts_model(
             &json!({
                 "voiceId": "voice_cosy",
-                "targetTtsModel": "cosyvoice-v3.5-plus"
+                "targetTtsModel": "cosyvoice-v3.5-flash"
             }),
             "speech-2.8-hd"
         ));
@@ -2519,7 +2657,7 @@ mod tests {
     }
 
     #[test]
-    fn speech_request_body_forwards_minimax_delivery_controls() {
+    fn speech_request_body_forwards_delivery_controls() {
         let payload = json!({
             "speed": 1.05,
             "pitch": -1,
@@ -2537,7 +2675,7 @@ mod tests {
             &payload,
             "第一段<#0.6#>第二段(laughs)。".to_string(),
             "male-qn-qingse".to_string(),
-            "speech-2.8-hd".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
             "mp3".to_string(),
         )
         .expect("request body");
@@ -2577,7 +2715,7 @@ mod tests {
             &payload,
             "慢一点，稳一点。".to_string(),
             "voice_xxx".to_string(),
-            "speech-2.8-turbo".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
             "mp3".to_string(),
         )
         .expect("request body");
@@ -2610,7 +2748,7 @@ mod tests {
             &payload,
             "这里是开场白，接下来进入重点。".to_string(),
             "voice_xxx".to_string(),
-            "cosyvoice-v3.5-plus".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
             "mp3".to_string(),
         )
         .expect("request body");
@@ -2632,63 +2770,18 @@ mod tests {
             body_value.get("sample_rate").and_then(Value::as_i64),
             Some(24000)
         );
-        assert!(body_value.get("emotion").is_none());
-        assert!(body_value.pointer("/voice_setting/emotion").is_none());
+        assert_eq!(
+            body_value.get("emotion").and_then(Value::as_str),
+            Some("happy")
+        );
+        assert_eq!(
+            body_value.pointer("/voice_setting/emotion").and_then(Value::as_str),
+            Some("sad")
+        );
     }
 
     #[test]
-    fn speech_request_body_rejects_unsupported_cosyvoice_ssml() {
-        let payload = json!({
-            "prompt": "请用清晰、平稳的语气朗读。"
-        });
-        let error = build_speech_request_body(
-            &payload,
-            "<speak><prosody rate=\"0.9\" volume=\"medium\">文本</prosody></speak>".to_string(),
-            "voice_xxx".to_string(),
-            "cosyvoice-v3.5-plus".to_string(),
-            "mp3".to_string(),
-        )
-        .expect_err("unsupported CosyVoice SSML should be rejected");
-
-        assert!(error.contains("CosyVoice does not support `<prosody>`"));
-    }
-
-    #[test]
-    fn speech_request_body_rejects_non_numeric_cosyvoice_speak_volume() {
-        let payload = json!({
-            "prompt": "请用清晰、平稳的语气朗读。"
-        });
-        let error = build_speech_request_body(
-            &payload,
-            "<speak rate=\"0.9\" volume=\"medium\">文本</speak>".to_string(),
-            "voice_xxx".to_string(),
-            "cosyvoice-v3.5-plus".to_string(),
-            "mp3".to_string(),
-        )
-        .expect_err("invalid CosyVoice speak volume should be rejected");
-
-        assert!(error.contains("`volume` must be a number"));
-    }
-
-    #[test]
-    fn speech_request_body_rejects_cosyvoice_fractional_volume_scale() {
-        let payload = json!({
-            "prompt": "请用清晰、平稳的语气朗读。"
-        });
-        let error = build_speech_request_body(
-            &payload,
-            "<speak rate=\"0.9\" pitch=\"0.95\" volume=\"1.0\">文本</speak>".to_string(),
-            "voice_xxx".to_string(),
-            "cosyvoice-v3.5-plus".to_string(),
-            "mp3".to_string(),
-        )
-        .expect_err("fractional-scale CosyVoice volume should be rejected");
-
-        assert!(error.contains("uses a 0-100 scale"));
-    }
-
-    #[test]
-    fn speech_request_body_accepts_plain_cosyvoice_input() {
+    fn speech_request_body_accepts_plain_doubao_input() {
         let payload = json!({
             "prompt": "请用清晰、平稳的说明语气朗读。",
             "language_hints": ["zh"]
@@ -2697,38 +2790,14 @@ mod tests {
             &payload,
             "在 Mac 上彻底删除文件，不是移到废纸篓，有几种方法。".to_string(),
             "voice_xxx".to_string(),
-            "cosyvoice-v3.5-plus".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
             "mp3".to_string(),
         )
-        .expect("plain CosyVoice input should pass");
+        .expect("plain doubao input should pass");
 
         assert_eq!(
             body.get("input").and_then(Value::as_str),
             Some("在 Mac 上彻底删除文件，不是移到废纸篓，有几种方法。")
-        );
-    }
-
-    #[test]
-    fn speech_request_body_drops_prompt_for_minimax_models() {
-        let payload = json!({
-            "prompt": "请用温柔、平稳的语气朗读。",
-            "emotion": "happy"
-        });
-
-        let body = build_speech_request_body(
-            &payload,
-            "这里是开场白，接下来进入重点。".to_string(),
-            "voice_xxx".to_string(),
-            "speech-2.8-turbo".to_string(),
-            "mp3".to_string(),
-        )
-        .expect("request body");
-        let body_value = Value::Object(body);
-
-        assert!(body_value.get("prompt").is_none());
-        assert_eq!(
-            body_value.get("emotion").and_then(Value::as_str),
-            Some("happy")
         );
     }
 
@@ -2743,12 +2812,177 @@ mod tests {
             &payload,
             "文本".to_string(),
             "voice_xxx".to_string(),
-            "speech-2.8-turbo".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
             "mp3".to_string(),
         )
         .expect_err("speed should be rejected");
 
         assert!(error.contains("speed"));
+    }
+
+    #[test]
+    fn speech_request_body_rejects_unsupported_cosyvoice_ssml() {
+        let payload = json!({});
+        let error = build_speech_request_body(
+            &payload,
+            "<prosody rate=\"0.9\">你好</prosody>".to_string(),
+            "voice_xxx".to_string(),
+            "cosyvoice-v3.5-flash".to_string(),
+            "mp3".to_string(),
+        )
+        .expect_err("unsupported CosyVoice SSML should be rejected");
+
+        assert!(error.contains("CosyVoice does not support `<prosody>`"));
+    }
+
+    #[test]
+    fn speech_request_body_accepts_cosyvoice_speak_attributes() {
+        let payload = json!({
+            "pitch": 0.95,
+            "emotion": "happy"
+        });
+        let body = build_speech_request_body(
+            &payload,
+            "<speak rate=\"0.9\" pitch=\"0.95\" volume=\"60\">你好</speak>".to_string(),
+            "voice_xxx".to_string(),
+            "cosyvoice-v3.5-flash".to_string(),
+            "mp3".to_string(),
+        )
+        .expect("valid CosyVoice input should pass");
+
+        assert_eq!(body.get("pitch").and_then(Value::as_f64), Some(0.95));
+        assert!(body.get("emotion").is_none());
+    }
+
+    #[test]
+    fn speech_request_body_rejects_out_of_range_cosyvoice_pitch() {
+        let payload = json!({ "pitch": 12 });
+        let error = build_speech_request_body(
+            &payload,
+            "你好".to_string(),
+            "voice_xxx".to_string(),
+            "cosyvoice-v3.5-flash".to_string(),
+            "mp3".to_string(),
+        )
+        .expect_err("CosyVoice pitch must stay on the 0.5-2.0 scale");
+
+        assert!(error.contains("pitch"));
+    }
+
+    #[test]
+    fn clone_model_target_tts_model_maps_current_models() {
+        assert_eq!(
+            clone_model_target_tts_model("doubao-voice-clone", ""),
+            "doubao-seed-tts-2.0"
+        );
+        assert_eq!(
+            clone_model_target_tts_model("cosyvoice-v3.5-flash-voice-clone", ""),
+            "cosyvoice-v3.5-flash"
+        );
+    }
+
+    #[test]
+    fn bailian_custom_voices_append_from_settings() {
+        let settings = json!({
+            "bailian_custom_voices_json": r#"[
+                {"id":"cosyvoice-v3.5-flash-bailian-abc123","name":"测试音色"},
+                {"id":""},
+                {"voiceId":"cosyvoice-v3.5-flash-bailian-def456"},
+                {"id":"cosyvoice-v3.5-flash-bailian-abc123","name":"重复项"}
+            ]"#,
+        });
+        let mut voices = Vec::new();
+        let mut seen = HashSet::new();
+        append_bailian_custom_voices(&mut voices, &mut seen, &settings);
+        assert_eq!(voices.len(), 2, "empty id and duplicates must be skipped");
+        assert_eq!(voices[0]["voice_id"], "cosyvoice-v3.5-flash-bailian-abc123");
+        assert_eq!(voices[0]["name"], "测试音色");
+        assert_eq!(voices[0]["provider"], "custom");
+        // 缺省备注回落为 ID 尾段。
+        assert_eq!(voices[1]["name"], "自定义复刻音色 · def456");
+        // 无配置时不注入。
+        let mut empty = Vec::new();
+        let mut empty_seen = HashSet::new();
+        append_bailian_custom_voices(&mut empty, &mut empty_seen, &json!({}));
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn adapter_system_voice_catalog_parses_default_entries() {
+        let items = adapter_system_voice_list_items();
+        let ids: Vec<String> = items
+            .iter()
+            .filter_map(|item| item.get("voice_id").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect();
+        assert!(ids.contains(&"volc-tts-default".to_string()));
+        assert!(ids.contains(&"cosyvoice-tts-default".to_string()));
+        // 火山平台：豆包官方 2.0 音色（uranus 系列）21 个，逐音色实测透传可用。
+        let volc_real = ids.iter().filter(|id| id.ends_with("_uranus_bigtts")).count();
+        assert_eq!(volc_real, 21, "volc uranus 2.0 voices should be present");
+        // 百炼平台：固定复刻音色 10 个，直连专属端点合成。
+        let bailian = ids
+            .iter()
+            .filter(|id| id.starts_with("cosyvoice-v3.5-flash-bailian-"))
+            .count();
+        assert_eq!(bailian, 10, "bailian cloned voices should be present");
+        for item in &items {
+            assert_eq!(item.get("status").and_then(Value::as_str), Some("ready"));
+            assert_eq!(item.get("provider").and_then(Value::as_str), Some("adapter"));
+        }
+    }
+
+    #[test]
+    fn speech_request_body_maps_cosyvoice_to_gateway_channel_model() {
+        let payload = json!({});
+        let body = build_speech_request_body(
+            &payload,
+            "你好".to_string(),
+            "cosyvoice-tts-default".to_string(),
+            "cosyvoice-v3.5-flash".to_string(),
+            "mp3".to_string(),
+        )
+        .expect("adapter default voice should pass");
+
+        assert_eq!(
+            body.get("model").and_then(Value::as_str),
+            Some(GATEWAY_COSYVOICE_CHANNEL_MODEL)
+        );
+        assert_eq!(body.get("voice_id").and_then(Value::as_str), Some(""));
+    }
+
+    #[test]
+    fn speech_request_body_maps_adapter_default_voice_for_doubao() {
+        let payload = json!({});
+        let body = build_speech_request_body(
+            &payload,
+            "你好".to_string(),
+            "volc-tts-default".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
+            "mp3".to_string(),
+        )
+        .expect("adapter default voice should pass");
+
+        assert_eq!(
+            body.get("model").and_then(Value::as_str),
+            Some(DOUBAO_TTS_MODEL)
+        );
+        assert_eq!(body.get("voice_id").and_then(Value::as_str), Some(""));
+
+        let body_with_real_voice = build_speech_request_body(
+            &payload,
+            "你好".to_string(),
+            "cloned_voice_01".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
+            "mp3".to_string(),
+        )
+        .expect("cloned voice should pass");
+        assert_eq!(
+            body_with_real_voice
+                .get("voice_id")
+                .and_then(Value::as_str),
+            Some("cloned_voice_01")
+        );
     }
 
     #[test]
@@ -2829,7 +3063,7 @@ mod tests {
             &payload,
             "第一段".to_string(),
             "voice_parent".to_string(),
-            "speech-2.8-hd".to_string(),
+            "doubao-seed-tts-2.0".to_string(),
             "mp3".to_string(),
         )
         .expect("body");
@@ -2847,26 +3081,5 @@ mod tests {
                 { "input": "二段" }
             ]
         })));
-    }
-
-    #[test]
-    fn minimax_system_voice_catalog_exposes_language_metadata() {
-        let voices = minimax_system_voice_list_items();
-
-        assert_eq!(voices.len(), 327);
-        let first = voices.first().expect("system voice");
-        assert_eq!(
-            first.get("voiceId").and_then(Value::as_str),
-            Some("male-qn-qingse")
-        );
-        assert_eq!(
-            first.get("languageBoost").and_then(Value::as_str),
-            Some("Chinese")
-        );
-        assert_eq!(
-            first.get("languageZh").and_then(Value::as_str),
-            Some("中文 (普通话)")
-        );
-        assert_eq!(first.get("source").and_then(Value::as_str), Some("system"));
     }
 }

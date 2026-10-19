@@ -33,7 +33,7 @@ print(version)
 PY
 )"
 
-ARCHIVE_NAME="Beav-${VERSION}.zip"
+ARCHIVE_NAME="Beav-extension-${VERSION}.zip"
 OUTPUT_PATH="$DIST_DIR/$ARCHIVE_NAME"
 TMP_DIR="$(mktemp -d)"
 TMP_ARCHIVE="$TMP_DIR/$ARCHIVE_NAME"

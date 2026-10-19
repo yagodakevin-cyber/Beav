@@ -1,7 +1,21 @@
 import { findAiPresetById, inferPresetIdByEndpoint, type AiSourceConfig } from '../../config/aiSources';
 import { filterAiModelsByCapability, normalizeAiModelDescriptors, parseAiSources } from '../../pages/settings/shared';
-import type { GenerationAgentVoice } from './agentContext';
 import type { ModelRouteOverride } from './submitPayload';
+
+/** 音色列表项的基础形状（自 agentContext 迁入，供 voice.list 归一化使用）。 */
+export type GenerationAgentVoice = {
+    id: string;
+    name: string;
+    language: string;
+    languageBoost: string;
+    languageZh: string;
+    languageEn: string;
+    source: string;
+    genderHint: string;
+    systemVoice: boolean;
+    targetTtsModel: string;
+    cloneModel: string;
+};
 
 const DEFAULT_AUDIO_LANGUAGE_OPTIONS = [
     { value: '', label: '自动' },
@@ -61,15 +75,29 @@ export type VoiceListItem = GenerationAgentVoice & {
     supportedModels: string[];
 };
 
-export const DEFAULT_AUDIO_TTS_MODEL = 'cosyvoice-v3.5-plus';
+export const DEFAULT_AUDIO_TTS_MODEL = 'doubao-seed-tts-2.0';
+
+/** 音频生成只保留这两个平台：火山引擎（官方原生音色）与阿里百炼（专属复刻音色）。 */
+export const SUPPORTED_AUDIO_TTS_MODELS: PickerOption[] = [
+    { value: 'doubao-seed-tts-2.0', label: '豆包语音合成 2.0 · 火山引擎', description: '火山引擎 · 官方原生音色' },
+    { value: 'cosyvoice-v3.5-flash', label: 'CosyVoice 3.5 Flash · 阿里百炼', description: '阿里百炼 · 专属复刻音色' },
+];
+
+export const SUPPORTED_AUDIO_TTS_MODEL_IDS: string[] = SUPPORTED_AUDIO_TTS_MODELS.map((option) => option.value);
+
+export function isSupportedAudioTtsModel(model: string): boolean {
+    return SUPPORTED_AUDIO_TTS_MODEL_IDS.some((id) => modelKeysMatch(id, model));
+}
+
+export function normalizeAudioTtsModel(model: string, fallback = DEFAULT_AUDIO_TTS_MODEL): string {
+    const selected = model.trim();
+    if (!selected) return fallback;
+    const matched = SUPPORTED_AUDIO_TTS_MODEL_IDS.find((id) => modelKeysMatch(id, selected));
+    return matched || fallback;
+}
 
 export function normalizedModelKey(value: string): string {
     return value.trim().toLowerCase();
-}
-
-export function isMinimaxTtsModel(model: string): boolean {
-    const key = normalizedModelKey(model);
-    return key.includes('minimax') || key.startsWith('speech-') || key.startsWith('speech_');
 }
 
 export function modelKeysMatch(left: string, right: string): boolean {
@@ -92,7 +120,6 @@ function shortVoiceId(value: string): string {
 export function voiceMatchesAudioModel(voice: VoiceListItem, model: string): boolean {
     const selected = model.trim();
     if (!selected) return false;
-    if (voice.systemVoice) return isMinimaxTtsModel(model);
     const target = voice.targetTtsModel.trim();
     if (target) return modelKeysMatch(target, selected);
     if (voice.supportedModels.length > 0) {
@@ -156,19 +183,7 @@ export function buildImageModelOptions(settings: SettingsShape): PickerOption[] 
 
 export function buildAudioModelOptions(settings: SettingsShape): PickerOption[] {
     const sources = parseAiSources(settings.ai_sources_json);
-    const optionsByModel = new Map<string, { label: string; sourceLabels: string[] }>();
-    const addModelOption = (modelId: string, sourceLabel: string) => {
-        const id = String(modelId || '').trim();
-        if (!id) return;
-        const existing = optionsByModel.get(id);
-        if (!existing) {
-            optionsByModel.set(id, { label: id, sourceLabels: [sourceLabel] });
-            return;
-        }
-        if (!existing.sourceLabels.includes(sourceLabel)) {
-            existing.sourceLabels.push(sourceLabel);
-        }
-    };
+    const sourceLabelsByModel = new Map<string, string[]>();
 
     for (const source of sources) {
         const descriptors = getAiSourceModelDescriptors(source);
@@ -183,15 +198,27 @@ export function buildAudioModelOptions(settings: SettingsShape): PickerOption[] 
             : sourceType;
 
         for (const model of audioModels) {
-            addModelOption(model.id, sourceLabel);
+            const id = String(model.id || '').trim();
+            if (!id) continue;
+            const labels = sourceLabelsByModel.get(id);
+            if (!labels) {
+                sourceLabelsByModel.set(id, [sourceLabel]);
+                continue;
+            }
+            if (!labels.includes(sourceLabel)) {
+                labels.push(sourceLabel);
+            }
         }
     }
 
-    return Array.from(optionsByModel.entries()).map(([value, option]) => ({
-        value,
-        label: option.label,
-        description: option.sourceLabels.join(' / '),
-    }));
+    // 只保留火山（豆包 TTS 2.0）与豆包（CosyVoice 3.5 Flash）两个平台，其余模型一律隐藏。
+    return SUPPORTED_AUDIO_TTS_MODELS.map((option) => {
+        const labels = sourceLabelsByModel.get(option.value);
+        return {
+            ...option,
+            description: labels && labels.length > 0 ? labels.join(' / ') : option.description,
+        };
+    });
 }
 
 export function parseAiModelRoutes(settings: SettingsShape): Record<string, unknown> {

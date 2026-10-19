@@ -25,8 +25,9 @@ const INLINE_ASSET_MAX_BYTES = 6 * 1024 * 1024;
 const UPDATE_STATE_KEY = 'pluginUpdateState';
 const UPDATE_ALARM_NAME = 'redbox-plugin-auto-update-check';
 const UPDATE_CHECK_INTERVAL_MINUTES = 360;
-const UPDATE_SOURCE_API_URL = 'https://redbox.ziz.hk/api/updates/plugin';
-const UPDATE_SOURCE_DOWNLOAD_URL = 'https://redbox.ziz.hk/download';
+// 更新源 100% 绑定到本仓库的 GitHub Releases（仅正式 Release）。
+const UPDATE_SOURCE_API_URL = 'https://api.github.com/repos/yagodakevin-cyber/Beav/releases/latest';
+const UPDATE_SOURCE_DOWNLOAD_URL = 'https://github.com/yagodakevin-cyber/Beav/releases/latest';
 const REDBOX_PLUGIN_SETTINGS_KEY = 'redboxPluginSettings';
 const XHS_TASK_HISTORY_KEY = 'xhsCollectorTaskHistory';
 const XHS_TASK_QUEUE_STATE_KEY = 'xhsCollectorTaskQueueState';
@@ -2081,17 +2082,39 @@ async function fetchRemotePluginManifest() {
   const response = await fetch(url.toString(), {
     cache: 'no-store',
     headers: {
-      'Accept': 'application/json, text/plain, */*',
+      'Accept': 'application/vnd.github+json, application/json, text/plain, */*',
     },
   });
-  if (response.status !== 404 && !response.ok) {
+  if (response.status === 404) {
+    // 仓库尚无正式 Release：视为无可用更新。
+    return { ready: false, version: currentVersion, releaseUrl: UPDATE_SOURCE_DOWNLOAD_URL };
+  }
+  if (!response.ok) {
     throw new Error(`更新源请求失败：HTTP ${response.status}`);
   }
   const data = await response.json();
   if (!data || typeof data !== 'object') {
     throw new Error('更新源返回了无效响应');
   }
-  return data;
+  // 只认正式发布的 Release，拒绝 draft / pre-release。
+  if (data.draft === true || data.prerelease === true) {
+    return { ready: false, version: currentVersion, releaseUrl: UPDATE_SOURCE_DOWNLOAD_URL };
+  }
+  const manifest = {
+    ready: true,
+    version: normalizeText(data.tag_name) || currentVersion,
+    releaseUrl: normalizeText(data.html_url) || UPDATE_SOURCE_DOWNLOAD_URL,
+  };
+  const assets = Array.isArray(data.assets) ? data.assets : [];
+  const pluginAsset = assets.find((asset) => {
+    const name = String(asset?.name || '').toLowerCase();
+    return name.endsWith('.zip') && name.includes('extension')
+      && isHttpUrl(String(asset?.browser_download_url || ''));
+  });
+  if (pluginAsset) {
+    manifest.plugin = { url: pluginAsset.browser_download_url };
+  }
+  return manifest;
 }
 
 async function openPluginUpdateSource() {

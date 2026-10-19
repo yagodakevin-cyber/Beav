@@ -67,6 +67,11 @@ export function useMediaJobSubscription(
                         await window.ipcRenderer.generation.getJob(jobId),
                     );
                     if (cancelled || !projection) continue;
+                    // 与 onJobUpdated 保持一致：已归档（被移除）的任务不回填，避免轮询复活
+                    if (projection.archivedAt && !options?.bootstrapFilter?.includeArchived) {
+                        mediaJobsStore.removeJob(projection.jobId);
+                        continue;
+                    }
                     mediaJobsStore.upsertJob(projection);
                 }
             } catch (error) {

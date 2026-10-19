@@ -112,7 +112,7 @@ mod tests {
 
     #[test]
     fn http_url_validation_accepts_http_and_https_only() {
-        assert!(is_http_url(" https://redbox.ziz.hk/download "));
+        assert!(is_http_url(" https://github.com/yagodakevin-cyber/Beav/releases/latest "));
         assert!(is_http_url("http://localhost:3000"));
         assert!(!is_http_url("file:///tmp/app.dmg"));
         assert!(!is_http_url("javascript:alert(1)"));

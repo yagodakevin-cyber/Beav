@@ -2,9 +2,8 @@ import { OFFICIAL_AUTO_SOURCE_ID, canonicalizeOfficialAutoSourceId } from '../..
 import type { McpServerConfig, RuntimePerfPreset } from '../../pages/settings/shared';
 import { createDefaultMcpServer } from '../../pages/settings/shared';
 
-export const DEFAULT_VOICE_TTS_MODEL = 'cosyvoice-v3.5-plus';
-export const DEFAULT_VOICE_CLONE_MODEL = 'cosyvoice-v3.5-plus-voice-clone';
-export const MINIMAX_VOICE_CLONE_MODEL = 'minimax-voice-clone';
+export const DEFAULT_VOICE_TTS_MODEL = 'doubao-seed-tts-2.0';
+export const DEFAULT_VOICE_CLONE_MODEL = 'doubao-voice-clone';
 export const FILE_INDEX_DASHBOARD_CACHE_TTL_MS = 60_000;
 export const FILE_INDEX_DASHBOARD_POLL_MS = 30_000;
 export const DEFAULT_VISUAL_INDEX_PROMPT_VERSION = 'visual-manifest-v2-zh';
@@ -266,9 +265,9 @@ export const DEFAULT_AI_MODEL_ROUTES: AiModelRoutes = {
 export const normalizeModelKey = (value: string) => String(value || '').trim().toLowerCase();
 
 export const cloneModelForVoiceTtsModel = (ttsModel: string, fallback = DEFAULT_VOICE_CLONE_MODEL) => {
-  const key = normalizeModelKey(ttsModel);
-  if (key.includes('cosyvoice')) return DEFAULT_VOICE_CLONE_MODEL;
-  if (key.startsWith('speech-') || key.startsWith('speech_') || key.includes('minimax')) return MINIMAX_VOICE_CLONE_MODEL;
+  const key = ttsModel.trim().toLowerCase();
+  if (key.includes('cosyvoice')) return `${key}-voice-clone`;
+  if (key.startsWith('doubao')) return 'doubao-voice-clone';
   return fallback || DEFAULT_VOICE_CLONE_MODEL;
 };
 

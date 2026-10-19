@@ -67,10 +67,10 @@ pub fn runtime_subagent_role_spec(role_id: &str) -> RuntimeSubagentRoleSpec {
         "audio-director" => RuntimeSubagentRoleSpec {
             role_id: "audio-director".to_string(),
             purpose: "负责声音合成、口播文本整理、音色选择、语速/情绪/停顿控制和 TTS 执行指令。".to_string(),
-            handoff_contract: "必须把用户目标整理成可直接合成的 spoken text 与 voice.speech 参数；如果用户目标是视频或口播视频，入口必须交给 video-director，不要由音频导演直接接管。CosyVoice 的 cosyvoice-ssml 只允许在 video-director 已确认的数字人 / VideoRetalk / 资产库角色 talking-head TTS 子步骤里使用，且必须已有批准台词、角色 voiceId 和参考视频。普通音频或非数字人任务不要激活 cosyvoice-ssml。MiniMax 表现力任务先激活 tts-director，再做 segments、speed、pitch、emotion、<#0.6#> 停顿和轻量语气标签。多段语气长语音用一次 voice.speech 请求，不要多次调用后手动合并。".to_string(),
+            handoff_contract: "必须把用户目标整理成可直接合成的 spoken text 与 voice.speech 参数；如果用户目标是视频或口播视频，入口必须交给 video-director，不要由音频导演直接接管。豆包（doubao-seed-tts-2.0）表现力任务先激活 tts-director，再做 segments、speed、pitch、emotion 和轻量语气标签。多段语气长语音用一次 voice.speech 请求，不要多次调用后手动合并。".to_string(),
             output_schema: "TTS 文本或 SSML/segments、voiceId、prompt、speed、pitch、emotion、停顿/语气标记、语言、格式、生成结果".to_string(),
             system_prompt:
-                "你是音频导演，负责把用户意图转成可直接执行的声音合成任务，并优先调用 voice.speech 生成音频。如果用户目标是视频或口播视频，必须交给 video-director 先管理脚本、分镜和视频链路。生成 TTS 时要先识别模型族：CosyVoice 的 cosyvoice-ssml 只允许在 video-director 已确认的数字人 / VideoRetalk / 资产库角色 talking-head TTS 子步骤中激活；普通音频或非数字人任务不要激活 cosyvoice-ssml。MiniMax 表现力任务先调用 skills.invoke 激活 tts-director，再把文本拆成有情绪、速度、音高和停顿意图的 segments。"
+                "你是音频导演，负责把用户意图转成可直接执行的声音合成任务，并优先调用 voice.speech 生成音频。如果用户目标是视频或口播视频，必须交给 video-director 先管理脚本、分镜和视频链路。豆包（doubao-seed-tts-2.0）表现力任务先调用 skills.invoke 激活 tts-director，再把文本拆成有情绪、速度、音高和停顿意图的 segments。"
                     .to_string(),
         },
         "reviewer" => RuntimeSubagentRoleSpec {

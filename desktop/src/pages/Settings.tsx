@@ -112,7 +112,6 @@ import { SHOW_CURRENT_RELEASE_NOTES_EVENT } from '../utils/currentReleaseNotes';
 import {
   DEFAULT_VOICE_TTS_MODEL,
   DEFAULT_VOICE_CLONE_MODEL,
-  MINIMAX_VOICE_CLONE_MODEL,
   FILE_INDEX_DASHBOARD_CACHE_TTL_MS,
   FILE_INDEX_DASHBOARD_POLL_MS,
   DEFAULT_VISUAL_INDEX_PROMPT_VERSION,
@@ -154,6 +153,10 @@ import {
   normalizeVisualIndexPromptVersion,
   normalizeAiModelRoutes,
 } from '../features/settings/settingsModel';
+import {
+  SUPPORTED_AUDIO_TTS_MODELS,
+  normalizeAudioTtsModel,
+} from '../features/media-generation/audioOptions';
 
 const MIN_CHAT_MAX_TOKENS = 1024;
 const DEFAULT_CHAT_MAX_TOKENS = 262144;
@@ -982,6 +985,8 @@ export function Settings({
   });
   const [aiModelRoutes, setAiModelRoutes] = useState<AiModelRoutes>(DEFAULT_AI_MODEL_ROUTES);
   const [aiSources, setAiSources] = useState<AiSourceConfig[]>([]);
+  const [bailianCustomVoices, setBailianCustomVoices] = useState<Array<{ id: string; name: string }>>([]);
+  const [bailianVoiceDraft, setBailianVoiceDraft] = useState<{ id: string; name: string }>({ id: '', name: '' });
   const [defaultAiSourceId, setDefaultAiSourceId] = useState('');
   const [activeAiSourceId, setActiveAiSourceId] = useState('');
   const [detectedAiProtocol, setDetectedAiProtocol] = useState<AiProtocol>('openai');
@@ -1579,7 +1584,9 @@ export function Settings({
       if (feature === 'voice') {
         const ttsModel = pickBestModelForSource(source, prev.voice_tts_model || prev.tts_model, 'tts')
           || pickBestModelForSource(source, prev.voice_tts_model || prev.tts_model, 'audio');
-        const nextTtsModel = ttsModel || prev.voice_tts_model || DEFAULT_VOICE_TTS_MODEL;
+        const nextTtsModel = normalizeAudioTtsModel(
+          ttsModel || prev.voice_tts_model || DEFAULT_VOICE_TTS_MODEL,
+        );
         const nextCloneModel = cloneModelForVoiceTtsModel(nextTtsModel, prev.voice_clone_model || DEFAULT_VOICE_CLONE_MODEL);
         return {
           ...prev,
@@ -1652,11 +1659,15 @@ export function Settings({
     return selectedImageSource ? filterAiModelsByCapability(getSourceModelList(selectedImageSource), 'image') : [];
   }, [getSourceModelList, selectedImageSource]);
 
-  const voiceTtsSourceModels = useMemo(() => {
-    const sourceModels = selectedVoiceSource ? getSourceModelList(selectedVoiceSource) : [];
-    const ttsModels = filterAiModelsByCapability(sourceModels, 'tts');
-    return ttsModels.length > 0 ? ttsModels : filterAiModelsByCapability(sourceModels, 'audio');
-  }, [getSourceModelList, selectedVoiceSource]);
+  // TTS 模型下拉只保留官方白名单两项：doubao-seed-tts-2.0 与 cosyvoice-v3.5-flash。
+  const voiceTtsSourceModels = useMemo<AiModelDescriptor[]>(
+    () => SUPPORTED_AUDIO_TTS_MODELS.map((option) => ({
+      id: option.value,
+      capabilities: ['tts'] as ModelCapability[],
+      inputCapabilities: [],
+    })),
+    [],
+  );
 
   const addModelModalRemoteModels = useMemo(() => {
     if (!addModelModalSource) return [];
@@ -2254,6 +2265,30 @@ export function Settings({
       return next;
     });
     setAddModelModalSourceId((prev) => (prev === sourceId ? '' : prev));
+  };
+
+  // 阿里百炼复刻音色：手动添加/删除音色 ID，立即持久化到 settings。
+  const persistBailianCustomVoices = (next: Array<{ id: string; name: string }>) => {
+    setBailianCustomVoices(next);
+    void window.ipcRenderer.saveSettings({
+      bailian_custom_voices_json: JSON.stringify(next),
+    });
+  };
+
+  const handleAddBailianCustomVoice = () => {
+    const voiceId = bailianVoiceDraft.id.trim();
+    if (!voiceId) return;
+    if (bailianCustomVoices.some((item) => item.id === voiceId)) {
+      setBailianVoiceDraft({ id: '', name: '' });
+      return;
+    }
+    const next = [...bailianCustomVoices, { id: voiceId, name: bailianVoiceDraft.name.trim() }];
+    persistBailianCustomVoices(next);
+    setBailianVoiceDraft({ id: '', name: '' });
+  };
+
+  const handleRemoveBailianCustomVoice = (voiceId: string) => {
+    persistBailianCustomVoices(bailianCustomVoices.filter((item) => item.id !== voiceId));
   };
 
   const handleToggleAiSourceExpand = (sourceId: string) => {
@@ -3682,6 +3717,67 @@ export function Settings({
     }
   }, []);
 
+  const [isCheckingForUpdate, setIsCheckingForUpdate] = useState(false);
+  const [updateCheckMessage, setUpdateCheckMessage] = useState<string | null>(null);
+  const [rollbackInfo, setRollbackInfo] = useState<{ version: string | null; canRollback: boolean }>({
+    version: null,
+    canRollback: false,
+  });
+
+  useEffect(() => {
+    void window.ipcRenderer.getAppUpdateStatus().then((status) => {
+      setRollbackInfo({
+        version: status?.backupVersion ?? null,
+        canRollback: Boolean(status?.canRollback),
+      });
+    }).catch(() => undefined);
+  }, []);
+
+  const handleCheckForUpdate = useCallback(async () => {
+    if (isCheckingForUpdate) return;
+    setIsCheckingForUpdate(true);
+    setUpdateCheckMessage(null);
+    try {
+      const result = await window.ipcRenderer.checkAppUpdate(true);
+      if (!result?.success) {
+        setUpdateCheckMessage(result?.error || '检查更新失败，请稍后重试');
+      } else if (!result.hasUpdate) {
+        setUpdateCheckMessage('当前已是最新版本');
+      } else {
+        // 有更新时由 app:update-available 事件弹出更新弹窗
+        setUpdateCheckMessage(null);
+      }
+    } catch (error) {
+      console.error('Failed to check for update:', error);
+      setUpdateCheckMessage('检查更新失败，请稍后重试');
+    } finally {
+      setIsCheckingForUpdate(false);
+    }
+  }, [isCheckingForUpdate]);
+
+  const handleRollbackUpdate = useCallback(async () => {
+    if (!rollbackInfo.canRollback) return;
+    const confirmed = await appConfirm(
+      `将把应用恢复到 v${rollbackInfo.version}，恢复过程中应用会自动重启。确认回滚吗？`,
+      {
+        title: '回滚到上一版本',
+        confirmLabel: '回滚',
+        cancelLabel: '取消',
+        tone: 'danger',
+      },
+    );
+    if (!confirmed) return;
+    try {
+      const result = await window.ipcRenderer.rollbackAppUpdate();
+      if (!result?.success) {
+        void appAlert(result?.error || '回滚失败');
+      }
+    } catch (error) {
+      console.error('Failed to rollback update:', error);
+      void appAlert('回滚失败');
+    }
+  }, [rollbackInfo]);
+
   const loadSettings = useCallback(async (options?: { preserveViewState?: boolean; preserveRemoteModels?: boolean }) => {
     const preserveViewState = Boolean(options?.preserveViewState);
     const requestId = ++settingsLoadRequestRef.current;
@@ -3745,6 +3841,21 @@ export function Settings({
         const requestedDefaultSourceId = canonicalizeOfficialAutoSourceId(String(settings.default_ai_source_id || '').trim());
         const prefersOfficialDefault = isOfficialAutoSourceId(requestedDefaultSourceId);
         let sourceList = parseAiSources(settings.ai_sources_json).filter((source) => !isDeprecatedEmptyOpenAiSource(source));
+        try {
+          const parsedVoices = JSON.parse(String(settings.bailian_custom_voices_json || '[]'));
+          if (Array.isArray(parsedVoices)) {
+            setBailianCustomVoices(parsedVoices
+              .map((item: { id?: string; voiceId?: string; name?: string }) => ({
+                id: String(item?.id || item?.voiceId || '').trim(),
+                name: String(item?.name || '').trim(),
+              }))
+              .filter((item: { id: string }) => item.id));
+          } else {
+            setBailianCustomVoices([]);
+          }
+        } catch {
+          setBailianCustomVoices([]);
+        }
         if (!sourceList.length && !prefersOfficialDefault && (settings.api_endpoint || settings.api_key || settings.model_name)) {
           const inferredPresetId = inferPresetIdByEndpoint(settings.api_endpoint || '');
           sourceList = [{
@@ -3830,7 +3941,7 @@ export function Settings({
           || (isOfficialAutoSourceId(resolvedChatSourceId) ? officialAiSourcePlaceholder : null)
           || resolvedDefaultSource
           || null;
-        const loadedVoiceTtsModel = String(loadedModelRoutes.voiceTts.model || settings.voice_tts_model || settings.tts_model || DEFAULT_VOICE_TTS_MODEL).trim();
+        const loadedVoiceTtsModel = normalizeAudioTtsModel(String(loadedModelRoutes.voiceTts.model || settings.voice_tts_model || settings.tts_model || DEFAULT_VOICE_TTS_MODEL).trim());
         const loadedVoiceCloneModel = cloneModelForVoiceTtsModel(
           loadedVoiceTtsModel,
           String(loadedModelRoutes.voiceClone.model || settings.voice_clone_model || DEFAULT_VOICE_CLONE_MODEL).trim(),
@@ -5711,7 +5822,7 @@ export function Settings({
           ? DASHSCOPE_LOCKED_IMAGE_MODEL
           : pickCapabilityModelForSource(resolvedImageSource, requestedImageModel, 'image'),
       ).trim();
-      const resolvedVoiceTtsModel = String(formData.voice_tts_model || aiModelRoutes.voiceTts.model || formData.tts_model || DEFAULT_VOICE_TTS_MODEL).trim();
+      const resolvedVoiceTtsModel = normalizeAudioTtsModel(String(formData.voice_tts_model || aiModelRoutes.voiceTts.model || formData.tts_model || DEFAULT_VOICE_TTS_MODEL).trim());
       const resolvedVoiceCloneModel = cloneModelForVoiceTtsModel(
         resolvedVoiceTtsModel,
         String(formData.voice_clone_model || aiModelRoutes.voiceClone.model || DEFAULT_VOICE_CLONE_MODEL).trim(),
@@ -5825,12 +5936,14 @@ export function Settings({
       const routeImageModel = resolvedImageModel;
       const routeVisualIndexModel = resolvedVisualIndexModel;
       const routeVideoAnalysisModel = resolvedVideoAnalysisModel;
-      const routeVoiceTtsModel = routeModel(
-        'voiceTts',
-        resolvedVoiceTtsModel,
-        resolvedVoiceSource,
-        (source) => pickBestModelForSource(source, '', 'tts') || pickBestModelForSource(source, '', 'audio') || DEFAULT_VOICE_TTS_MODEL,
-      ) || DEFAULT_VOICE_TTS_MODEL;
+      const routeVoiceTtsModel = normalizeAudioTtsModel(
+        routeModel(
+          'voiceTts',
+          resolvedVoiceTtsModel,
+          resolvedVoiceSource,
+          (source) => pickBestModelForSource(source, '', 'tts') || pickBestModelForSource(source, '', 'audio') || DEFAULT_VOICE_TTS_MODEL,
+        ) || DEFAULT_VOICE_TTS_MODEL,
+      );
       const routeVoiceCloneModel = resolvedVoiceCloneModel;
       const resolvedChatSource = routeScopedSource('chat') || legacyChatSource || null;
       const resolvedChatSourceId = canonicalizeOfficialAutoSourceId(
@@ -6065,7 +6178,7 @@ export function Settings({
     if (scope === 'image') return String(aiModelRoutes.image.model || formData.image_model || '').trim();
     if (scope === 'visualIndex') return String(aiModelRoutes.visualIndex.model || formData.visual_index_model || '').trim();
     if (scope === 'videoAnalysis') return String(aiModelRoutes.videoAnalysis.model || formData.video_analysis_model || '').trim();
-    if (scope === 'voiceTts') return String(aiModelRoutes.voiceTts.model || formData.voice_tts_model || formData.tts_model || DEFAULT_VOICE_TTS_MODEL).trim();
+    if (scope === 'voiceTts') return normalizeAudioTtsModel(String(aiModelRoutes.voiceTts.model || formData.voice_tts_model || formData.tts_model || DEFAULT_VOICE_TTS_MODEL).trim());
     if (scope === 'voiceClone') return String(aiModelRoutes.voiceClone.model || formData.voice_clone_model || DEFAULT_VOICE_CLONE_MODEL).trim();
     return '';
   }, [
@@ -6104,7 +6217,7 @@ export function Settings({
       }
       return String(videoModels[0]?.id || '').trim();
     };
-    if (scope === 'voiceTts') return pickBestModelForSource(officialAiSource, preferredModel, 'tts') || pickBestModelForSource(officialAiSource, preferredModel, 'audio') || pickFirstOfficialModel('tts') || DEFAULT_VOICE_TTS_MODEL;
+    if (scope === 'voiceTts') return normalizeAudioTtsModel(preferredModel) || normalizeAudioTtsModel(pickBestModelForSource(officialAiSource, preferredModel, 'tts') || pickBestModelForSource(officialAiSource, preferredModel, 'audio') || pickFirstOfficialModel('tts') || DEFAULT_VOICE_TTS_MODEL);
     if (scope === 'voiceClone') return pickBestModelForSource(officialAiSource, preferredModel, 'voice_clone') || pickBestModelForSource(officialAiSource, preferredModel, 'audio') || pickFirstOfficialModel('voice_clone') || DEFAULT_VOICE_CLONE_MODEL;
     if (scope === 'transcription') return pickBestModelForSource(officialAiSource, preferredModel, 'transcription') || pickFirstOfficialModel('transcription');
     if (scope === 'embedding') return pickBestModelForSource(officialAiSource, preferredModel, 'embedding') || pickFirstOfficialModel('embedding') || 'text-embedding-3-small';
@@ -6556,6 +6669,12 @@ export function Settings({
                 handleVersionTap={handleVersionTap}
                 handleShowCurrentReleaseNotes={handleShowCurrentReleaseNotes}
                 handleOpenDownloadPage={handleOpenDownloadPage}
+                isCheckingForUpdate={isCheckingForUpdate}
+                updateCheckMessage={updateCheckMessage}
+                onCheckForUpdate={handleCheckForUpdate}
+                rollbackVersion={rollbackInfo.version}
+                canRollbackBackup={rollbackInfo.canRollback}
+                onRollbackUpdate={handleRollbackUpdate}
                 handleOpenAppOnboarding={onOpenAppOnboarding}
               />
             )}
@@ -6769,6 +6888,63 @@ export function Settings({
                                   </div>
                                 ) : (
                                   <>
+                                    {/maas\.aliyuncs\.com|dashscope\.aliyuncs\.com/i.test(source.baseURL) && (
+                                      <div className="rounded border border-border bg-surface-secondary/30 p-3 space-y-2">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <div className="text-xs font-medium text-text-primary">阿里百炼 · 复刻音色管理</div>
+                                          <span className="text-[11px] text-text-tertiary">共 {bailianCustomVoices.length} 个自定义音色</span>
+                                        </div>
+                                        <p className="text-[11px] text-text-tertiary">
+                                          粘贴百炼控制台复刻音色 ID（cosyvoice-v3.5-flash-bailian-开头），保存后可在音频创作的音色列表中选择。内置的 10 个复刻音色不受影响。
+                                        </p>
+                                        <div className="flex flex-col md:flex-row gap-2">
+                                          <input
+                                            type="text"
+                                            value={bailianVoiceDraft.id}
+                                            onChange={(e) => setBailianVoiceDraft((prev) => ({ ...prev, id: e.target.value }))}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddBailianCustomVoice(); }}
+                                            placeholder="音色 ID，如 cosyvoice-v3.5-flash-bailian-xxxxxxxx..."
+                                            className="flex-1 bg-surface-primary rounded border border-border px-3 py-2 text-xs focus:outline-none focus:border-accent-primary transition-colors"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={bailianVoiceDraft.name}
+                                            onChange={(e) => setBailianVoiceDraft((prev) => ({ ...prev, name: e.target.value }))}
+                                            onKeyDown={(e) => { if (e.key === 'Enter') handleAddBailianCustomVoice(); }}
+                                            placeholder="备注名（可选）"
+                                            className="w-full md:w-40 bg-surface-primary rounded border border-border px-3 py-2 text-xs focus:outline-none focus:border-accent-primary transition-colors"
+                                          />
+                                          <button
+                                            type="button"
+                                            onClick={handleAddBailianCustomVoice}
+                                            disabled={!bailianVoiceDraft.id.trim()}
+                                            className="px-3 py-2 border border-border rounded text-xs hover:bg-surface-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                          >
+                                            添加音色
+                                          </button>
+                                        </div>
+                                        {bailianCustomVoices.length > 0 && (
+                                          <div className="space-y-1 max-h-44 overflow-y-auto">
+                                            {bailianCustomVoices.map((item) => (
+                                              <div key={item.id} className="flex items-center gap-2 rounded border border-border/70 bg-surface-primary px-2.5 py-1.5">
+                                                <div className="min-w-0 flex-1">
+                                                  <div className="text-xs text-text-primary truncate">{item.name || '自定义复刻音色'}</div>
+                                                  <div className="text-[11px] text-text-tertiary truncate font-mono">{item.id}</div>
+                                                </div>
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRemoveBailianCustomVoice(item.id)}
+                                                  className="p-1 text-text-tertiary hover:text-red-500 hover:bg-red-500/10 rounded transition-colors"
+                                                  title="删除音色"
+                                                >
+                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                                       <input
                                         type="text"
@@ -7053,8 +7229,8 @@ export function Settings({
 	                          sourceValue: voiceSourceId,
 	                          sources: displayedAiSources,
 	                          onSourceChange: (nextSourceId) => handleLinkedSourceChange('voice', nextSourceId),
-	                          modelValue: formData.voice_tts_model,
-	                          onModelChange: (modelId) => applyRouteModel('voiceTts', modelId),
+	                          modelValue: normalizeAudioTtsModel(formData.voice_tts_model),
+                          onModelChange: (modelId) => applyRouteModel('voiceTts', modelId),
 	                          modelOptions: voiceTtsSourceModels.map((model) => ({
 	                            id: model.id,
 	                            label: model.id,

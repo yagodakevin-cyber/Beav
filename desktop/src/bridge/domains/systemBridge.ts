@@ -25,6 +25,21 @@ interface AppUpdateInstallResult {
   error?: string;
 }
 
+interface AppUpdateStatusResult {
+  currentVersion: string;
+  updatedTo?: string | null;
+  pendingTarget?: string | null;
+  backupVersion?: string | null;
+  canRollback?: boolean;
+  installable?: boolean;
+}
+
+interface AppUpdateRollbackResult {
+  success: boolean;
+  version?: string;
+  error?: string;
+}
+
 export function createSystemBridge(core: BridgeCore) {
   return {
     files: {
@@ -168,6 +183,22 @@ export function createSystemBridge(core: BridgeCore) {
       undefined,
       {
         fallbackChannel: 'app:install-update',
+        fallback: { success: false, error: 'App updater unavailable' },
+      },
+    ),
+    getAppUpdateStatus: () => core.invokeCommandGuarded<AppUpdateStatusResult>(
+      'app_get_update_status',
+      undefined,
+      {
+        fallbackChannel: 'app:get-update-status',
+        fallback: { currentVersion: '', canRollback: false, installable: false },
+      },
+    ),
+    rollbackAppUpdate: () => core.invokeCommandGuarded<AppUpdateRollbackResult>(
+      'app_rollback_update',
+      undefined,
+      {
+        fallbackChannel: 'app:rollback-update',
         fallback: { success: false, error: 'App updater unavailable' },
       },
     ),

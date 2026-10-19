@@ -67,7 +67,7 @@ interface SettingsShape {
     visual_index_enabled?: boolean;
 }
 
-const BROWSER_PLUGIN_DOWNLOAD_URL = APP_BRAND.downloadUrl || 'https://redbox.ziz.hk/download';
+const BROWSER_PLUGIN_DOWNLOAD_URL = APP_BRAND.downloadUrl || 'https://github.com/yagodakevin-cyber/Beav/releases/latest';
 
 const copyTextWithClipboard = async (text: string): Promise<boolean> => {
     try {
@@ -1385,7 +1385,7 @@ export function Knowledge({ onNavigateToRedClaw, isEmbedded = false, isActive = 
     };
 
     const openYouTube = (url: string) => {
-        window.open(url, '_blank');
+        void window.ipcRenderer.openExternalUrl(url);
     };
 
     const handleRetrySubtitle = async (videoId: string) => {
@@ -3190,7 +3190,7 @@ export function Knowledge({ onNavigateToRedClaw, isEmbedded = false, isActive = 
                                         {selectedAuthor.profileUrl && (
                                             <button
                                                 type="button"
-                                                onClick={() => window.open(selectedAuthor.profileUrl, '_blank')}
+                                                onClick={() => { void window.ipcRenderer.openExternalUrl(selectedAuthor.profileUrl); }}
                                                 className="inline-flex items-center gap-1 rounded-md text-accent-primary hover:underline underline-offset-2"
                                             >
                                                 <ExternalLink className="h-3 w-3" />

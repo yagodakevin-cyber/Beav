@@ -512,7 +512,7 @@ export function useChatAttachments({
   }, [attachFilePath]);
 
   useEffect(() => {
-    if (!allowFileUpload || !isActive) return;
+    if (!allowFileUpload || !isActive || !isTauriRuntime()) return;
     let disposed = false;
     let unlisten: (() => void) | null = null;
 

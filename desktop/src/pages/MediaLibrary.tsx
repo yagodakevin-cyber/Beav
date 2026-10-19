@@ -276,6 +276,7 @@ function AudioAssetCover({
                     src={resolveAssetUrl(src)}
                     className="w-full"
                     controls
+                    controlsList="nodownload"
                     preload="metadata"
                     onClick={(event) => event.stopPropagation()}
                     onLoadedMetadata={onReady}

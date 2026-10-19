@@ -1,0 +1,237 @@
+{
+  "source": "bailian-tts-adapter",
+  "note": "按 TTS 模型平台分组。火山平台（doubao-seed-tts-2.0）经官方网关透传豆包官方原生音色（uranus 2.0 系列，已逐音色实测）；阿里百炼平台（cosyvoice-v3.5-flash）直连用户百炼专属端点（DashScope WS 协议），10 个固定复刻音色。条目 voice_id 全部真实透传，默认音色占位符映射为通道默认音色。",
+  "voices": [
+    {
+      "voice_id": "volc-tts-default",
+      "name": "默认音色（火山 · 豆包语音合成 2.0）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_vv_uranus_bigtts",
+      "name": "Vivi 2.0（女声 · 多语种）",
+      "gender_hint": "female",
+      "language_zh": "中文 / 日文 / 英文",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_xiaohe_uranus_bigtts",
+      "name": "小何 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_sophie_uranus_bigtts",
+      "name": "魅力苏菲 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_qingxinnvsheng_uranus_bigtts",
+      "name": "清新女声 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_cancan_uranus_bigtts",
+      "name": "知性灿灿 2.0（女声 · 角色扮演）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_tianmeixiaoyuan_uranus_bigtts",
+      "name": "甜美小源 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_shuangkuaisisi_uranus_bigtts",
+      "name": "爽快思思 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_peiqi_uranus_bigtts",
+      "name": "佩奇猪 2.0（女声 · 视频配音）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_kefunvsheng_uranus_bigtts",
+      "name": "暖阳女声 2.0（女声 · 客服）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_linjianvhai_uranus_bigtts",
+      "name": "邻家女孩 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_gaolengyujie_uranus_bigtts",
+      "name": "高冷御姐 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_female_wenroushunv_uranus_bigtts",
+      "name": "温柔淑女 2.0（女声）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_m191_uranus_bigtts",
+      "name": "云舟 2.0（男声）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_taocheng_uranus_bigtts",
+      "name": "小天 2.0（男声）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_liufei_uranus_bigtts",
+      "name": "刘飞 2.0（男声）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_shaonianzixin_uranus_bigtts",
+      "name": "少年梓辛 2.0（男声）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_ruyaqingnian_uranus_bigtts",
+      "name": "儒雅青年 2.0（男声）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_qingcang_uranus_bigtts",
+      "name": "擎苍 2.0（男声 · 角色扮演）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_sunwukong_uranus_bigtts",
+      "name": "猴哥 2.0（男声 · 视频配音）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_xuanyijieshuo_uranus_bigtts",
+      "name": "悬疑解说 2.0（男声 · 有声阅读）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "zh_male_naiqimengwa_uranus_bigtts",
+      "name": "奶气萌娃 2.0（童声）",
+      "gender_hint": "male",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["doubao-seed-tts-2.0"]
+    },
+    {
+      "voice_id": "cosyvoice-tts-default",
+      "name": "默认音色（阿里百炼 · CosyVoice 3.5 Flash）",
+      "gender_hint": "female",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-96383386bcaa435da39bc6bdb5e2824c",
+      "name": "百炼复刻音色 01",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-4d4a5a09121541739b3afff1fc696ee8",
+      "name": "百炼复刻音色 02",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-e831995187cc45d9bf54776652c68a1a",
+      "name": "百炼复刻音色 03",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-c9640354201348b8ac04e4419dfc7c42",
+      "name": "百炼复刻音色 04",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-f005e0f230774282b8aa1a3ee028c5df",
+      "name": "百炼复刻音色 05",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-2ba4be74792346d3b9d44961c7360b2d",
+      "name": "百炼复刻音色 06",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-1d9187e98dc3450dbb6bb644fcbc8dee",
+      "name": "百炼复刻音色 07",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-c7f4e39d888d49cc896292d42464808c",
+      "name": "百炼复刻音色 08",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-ad91ca3685ce41318e43895d2abd2e85",
+      "name": "百炼复刻音色 09",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    },
+    {
+      "voice_id": "cosyvoice-v3.5-flash-bailian-38471b94820e4d4a92d92fee43a14656",
+      "name": "百炼复刻音色 10",
+      "gender_hint": "unknown",
+      "language_zh": "中文 (普通话)",
+      "supportedModels": ["cosyvoice-v3.5-flash"]
+    }
+  ]
+}

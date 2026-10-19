@@ -340,7 +340,8 @@ export function CoverStudio({ isActive = false, onExecutionStateChange, onReturn
             const raw = await window.ipcRenderer.getSettings();
             const next = (raw || {}) as SettingsShape;
             setSettings(next);
-            setSpaceId(next.active_space_id || 'default');
+            // 设置投影可能缺 active_space_id；保留已有空间上下文，避免把 loadSpaceContext 的结果覆盖回 default
+            setSpaceId((prev) => next.active_space_id || prev || 'default');
             setModel(next.image_model || 'gpt-image-1');
             setQuality(next.image_quality === 'low' || next.image_quality === 'medium' || next.image_quality === 'high' ? next.image_quality : 'medium');
         } catch (error) {

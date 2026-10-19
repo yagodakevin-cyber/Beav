@@ -19,7 +19,7 @@ function replaceCargoPackageVersion(contents, version) {
 
 function replaceCargoLockRootVersion(contents, packageName, version) {
   const escapedPackageName = packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = new RegExp(`(\\[\\[package\\]\\]\\nname = "${escapedPackageName}"\\nversion = )"[^"]+"`);
+  const pattern = new RegExp(`(\\[\\[package\\]\\]\\r?\\nname = "${escapedPackageName}"\\r?\\nversion = )"[^"]+"`);
   if (!pattern.test(contents)) {
     throw new Error('Failed to locate src-tauri/Cargo.lock root package version');
   }

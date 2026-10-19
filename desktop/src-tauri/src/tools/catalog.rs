@@ -1952,11 +1952,11 @@ fn voice_clone_input_schema() -> Value {
             ),
             (
                 "model",
-                string_schema("Optional clone model key; use cosyvoice-v3.5-plus-voice-clone for CosyVoice V3.5 cloning."),
+                string_schema("Optional clone model key; use doubao-voice-clone for Doubao voice cloning."),
             ),
             (
                 "targetTtsModel",
-                string_schema("Optional target TTS model for this cloned voice, such as cosyvoice-v3.5-plus. The host stores the resulting voiceId under this model."),
+                string_schema("Optional target TTS model for this cloned voice, such as doubao-seed-tts-2.0 or cosyvoice-v3.5-flash. The host stores the resulting voiceId under this model."),
             ),
             (
                 "writeBack",
@@ -2012,11 +2012,11 @@ fn voice_bind_asset_input_schema() -> Value {
 fn voice_speech_input_schema() -> Value {
     let voice_setting_schema = json!({
         "type": "object",
-        "description": "MiniMax-compatible voice controls. Top-level speed/pitch/emotion are preferred for new calls; emotion is only forwarded to MiniMax-family TTS models.",
+        "description": "voice.speech delivery controls. Top-level speed/pitch/emotion are preferred for new calls; they are forwarded to the TTS adapter as-is.",
         "properties": {
             "voice_id": { "type": "string" },
             "speed": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
-            "pitch": { "type": "integer", "minimum": -12, "maximum": 12, "description": "MiniMax-only segment pitch control. Do not use this for CosyVoice; set CosyVoice pitch inside SSML <speak pitch=\"1\"> where neutral is 1, not 0." },
+            "pitch": { "type": "integer", "minimum": -12, "maximum": 12, "description": "Segment pitch control, -12 to 12." },
             "emotion": { "type": "string", "enum": ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "fluent", "whipser", "whisper"] },
             "add_silence": { "type": "number" }
         },
@@ -2035,14 +2035,14 @@ fn voice_speech_input_schema() -> Value {
     });
     let speech_segment_schema = json!({
         "type": "object",
-        "description": "One ordered TTS segment. Segment controls override the parent voice.speech controls, including voiceId and prompt. Use segments for MiniMax-family models with emotion controls, and for CosyVoice only inside a video-director managed digital-human / VideoRetalk TTS substep. In that CosyVoice subflow, each segment should contain one complete SSML input plus a segment-specific prompt.",
+        "description": "One ordered TTS segment. Segment controls override the parent voice.speech controls, including voiceId and prompt. Use segments for expressive multi-part narration with emotion, speed, and pitch controls.",
         "properties": {
-            "input": { "type": "string", "description": "Exact spoken text or SSML for this segment. For CosyVoice inside a digital-human / VideoRetalk subflow, this should be one complete <speak rate=\"...\" pitch=\"...\" volume=\"...\">...</speak> SSML segment. CosyVoice pitch is a positive 0.5-2 multiplier where neutral is pitch=\"1\", not pitch=\"0\". CosyVoice volume is 0-100, not 0-1. For MiniMax, plain text with MiniMax pause markers and tone tags is allowed." },
+            "input": { "type": "string", "description": "Exact spoken text for this segment. Plain text with tone tags like (laughs) or (sighs) is allowed." },
             "text": { "type": "string", "description": "Alias for input." },
             "voiceId": { "type": "string" },
             "voice_id": { "type": "string" },
             "voice": { "type": "string" },
-            "prompt": { "type": "string", "description": "CosyVoice segment-specific voice style prompt. MiniMax ignores prompt." },
+            "prompt": { "type": "string", "description": "Segment-specific voice style prompt." },
             "speed": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
             "pitch": { "type": "integer", "minimum": -12, "maximum": 12 },
             "emotion": { "type": "string", "enum": ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "fluent", "whipser", "whisper"] },
@@ -2059,14 +2059,14 @@ fn voice_speech_input_schema() -> Value {
             (
                 "input",
                 string_schema(
-                    "Final narration script text to synthesize. If the user is asking for any video or 口播视频, the workflow must start from `video-director`; do not use voice.speech as the video entrypoint. For CosyVoice-family models, activate `cosyvoice-ssml` only inside a `video-director` managed digital-human / VideoRetalk / asset-library talking-head TTS substep after the script, role voiceId, and character video reference are resolved. In that narrow flow, use ordered `segments` with one complete `<speak rate pitch volume>` SSML input and a segment-specific `prompt` per segment. Outside that flow, keep CosyVoice payloads conservative and do not activate `cosyvoice-ssml`. For MiniMax-family models, use plain text or `segments`; MiniMax pause markers like <#0.6#> and tone tags like (laughs) or (sighs) are allowed only for MiniMax."
+                    "Final narration script text to synthesize. If the user is asking for any video or 口播视频, the workflow must start from `video-director`; do not use voice.speech as the video entrypoint. For expressive narration on Doubao models such as `doubao-seed-tts-2.0`, invoke `tts-director` and use ordered `segments` with `emotion`, `speed`, and `pitch` controls. Tone tags like (laughs) or (sighs) are allowed."
                 ),
             ),
             (
                 "segments",
                 json!({
                     "type": "array",
-                    "description": "Ordered TTS segments for multi-sentence narration, dialogue, short-video口播, ads, product explanation, or any speech that needs emphasis changes. For CosyVoice, use `cosyvoice-ssml` only inside a video-director managed digital-human / VideoRetalk / asset-library talking-head TTS substep; each segment should include one complete SSML input and a segment-specific prompt. For MiniMax, use segments with emotion, speed, pitch, and pause strategy.",
+                    "description": "Ordered TTS segments for multi-sentence narration, dialogue, short-video口播, ads, product explanation, or any speech that needs emphasis changes. Use segments with emotion, speed, pitch, and pause strategy.",
                     "items": speech_segment_schema,
                     "minItems": 1,
                     "maxItems": 50
@@ -2088,11 +2088,11 @@ fn voice_speech_input_schema() -> Value {
             ),
             (
                 "model",
-                string_schema("Optional TTS model key. Voice ids are model-bound; cosyvoice-v3.5-plus only accepts cloned/designed CosyVoice voices, not MiniMax system voices."),
+                string_schema("Optional TTS model key. Voice ids are model-bound; use a model-matched voice, such as doubao-seed-tts-2.0 or cosyvoice-v3.5-flash voices."),
             ),
             (
                 "prompt",
-                string_schema("Optional TTS delivery prompt, such as voice style, tone, pace, or emotion guidance. Forwarded to CosyVoice-family TTS models; MiniMax-family models ignore it."),
+                string_schema("Optional TTS delivery prompt, such as voice style, tone, pace, or emotion guidance. Forwarded to the TTS adapter as-is."),
             ),
             (
                 "language_hints",
@@ -2116,11 +2116,11 @@ fn voice_speech_input_schema() -> Value {
             ),
             (
                 "emotion",
-                speech_emotion_schema("MiniMax speech emotion. Forwarded only to MiniMax-family TTS models; CosyVoice-family models ignore emotion; CosyVoice SSML plus prompt is reserved for digital-human / VideoRetalk subflows."),
+                speech_emotion_schema("TTS emotion. Forwarded to the TTS adapter as-is."),
             ),
             (
                 "add_silence",
-                json!({ "type": "number", "description": "MiniMax native sentence silence passthrough." }),
+                json!({ "type": "number", "description": "Native add_silence passthrough to the TTS adapter." }),
             ),
             ("voice_setting", voice_setting_schema),
             ("audio_setting", audio_setting_schema),
@@ -2161,7 +2161,7 @@ fn voice_speech_input_schema() -> Value {
         ],
         &["voiceId"],
         Some(
-            "Generate narration audio from `input` or ordered `segments` using a platform voice id. Always include the selected TTS `model` when known. This is not the entrypoint for video requests; AI chat video work must start from `video-director`. CosyVoice may activate `cosyvoice-ssml` only inside a video-director managed digital-human / VideoRetalk / asset-library talking-head TTS substep; unsupported CosyVoice SSML such as <prosody> is rejected locally, and CosyVoice pitch neutral is 1, not 0. MiniMax should invoke `tts-director` and then create `segments` with `emotion` controls. Do not call voice.speech repeatedly and merge manually.",
+            "Generate narration audio from `input` or ordered `segments` using a platform voice id. Always include the selected TTS `model` when known. This is not the entrypoint for video requests; AI chat video work must start from `video-director`. For expressive narration, invoke `tts-director` and then create `segments` with `emotion` controls. Do not call voice.speech repeatedly and merge manually.",
         ),
     )
 }
@@ -4554,10 +4554,10 @@ fn redbox_input_schema() -> Value {
         "description": "Structured operation input. For image generation, put prompt/count/aspectRatio/resolution/quality/referenceImages here; aspectRatio, resolution, and quality are required and must be non-empty.",
         "properties": {
             "prompt": { "type": "string", "description": "Generation or operation prompt." },
-            "input": { "type": "string", "description": "Literal text input for speech/TTS. If the user asks for any video or 口播视频, start from video-director instead of voice.speech. For CosyVoice, activate cosyvoice-ssml only inside a video-director managed digital-human / VideoRetalk / asset-library talking-head TTS substep after the script, role voiceId, and character video reference are resolved. In that narrow flow, segments may use complete <speak rate pitch volume> SSML input and segment-specific prompt. Outside that flow, keep CosyVoice payloads conservative and do not activate cosyvoice-ssml. For MiniMax expressive narration, invoke tts-director and prefer segments. MiniMax pause markers like <#0.6#> and tone tags like (laughs) are allowed only for MiniMax." },
+            "input": { "type": "string", "description": "Literal text input for speech/TTS. If the user asks for any video or 口播视频, start from video-director instead of voice.speech. For expressive narration, invoke tts-director and prefer segments. Tone tags like (laughs) or (sighs) are allowed." },
             "segments": {
                 "type": "array",
-                "description": "Ordered TTS segments for multi-sentence narration, short-video口播, ads, product explanation, dialogue, or any speech needing emphasis changes. For CosyVoice, use cosyvoice-ssml only inside a video-director managed digital-human / VideoRetalk / asset-library talking-head TTS substep; each segment uses one complete SSML input plus segment-specific prompt. For MiniMax, use emotion, speed, pitch, and pauses.",
+                "description": "Ordered TTS segments for multi-sentence narration, short-video口播, ads, product explanation, dialogue, or any speech needing emphasis changes. Use segments with emotion, speed, pitch, and pause strategy.",
                 "maxItems": 50,
                 "items": {
                     "type": "object",
@@ -4566,9 +4566,9 @@ fn redbox_input_schema() -> Value {
                     "properties": {
                         "input": { "type": "string" },
                         "text": { "type": "string" },
-                        "prompt": { "type": "string", "description": "CosyVoice segment-specific voice style prompt." },
+                        "prompt": { "type": "string", "description": "Segment-specific voice style prompt." },
                         "speed": { "type": "number", "minimum": 0.5, "maximum": 2.0 },
-                        "pitch": { "type": "integer", "minimum": -12, "maximum": 12, "description": "MiniMax-only segment pitch control. Do not use this for CosyVoice; set CosyVoice pitch inside SSML <speak pitch=\"1\"> where neutral is 1, not 0." },
+                        "pitch": { "type": "integer", "minimum": -12, "maximum": 12, "description": "Segment pitch control, -12 to 12." },
                         "emotion": { "type": "string", "enum": ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "fluent", "whipser", "whisper"] },
                         "add_silence": { "type": "number" },
                         "pauseBeforeSeconds": { "type": "number", "minimum": 0, "maximum": 10, "description": "Silent gap inserted before this segment during final merge." },
@@ -4582,10 +4582,10 @@ fn redbox_input_schema() -> Value {
             "responseFormat": { "type": "string", "description": "Optional audio format for speech/TTS, usually mp3 or wav." },
             "languageBoost": { "type": "string", "description": "Optional language boost for speech/TTS, such as zh-CN." },
             "speed": { "type": "number", "minimum": 0.5, "maximum": 2.0, "description": "Optional TTS speed. 1.0 is neutral; use subtle values such as 0.92 or 1.08 unless asked otherwise." },
-            "pitch": { "type": "integer", "minimum": -12, "maximum": 12, "description": "Optional MiniMax TTS pitch. 0 is neutral only for MiniMax. Do not use this for CosyVoice; set CosyVoice pitch inside SSML <speak pitch=\"1\"> where neutral is 1." },
-            "emotion": { "type": "string", "enum": ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "fluent", "whipser", "whisper"], "description": "Optional MiniMax TTS emotion. CosyVoice models ignore emotion; CosyVoice SSML plus prompt is reserved for digital-human / VideoRetalk subflows." },
-            "add_silence": { "type": "number", "description": "Optional MiniMax sentence silence passthrough." },
-            "voice_setting": { "type": "object", "description": "Optional native MiniMax voice_setting passthrough.", "additionalProperties": true },
+            "pitch": { "type": "integer", "minimum": -12, "maximum": 12, "description": "Optional TTS pitch. 0 is neutral." },
+            "emotion": { "type": "string", "enum": ["happy", "sad", "angry", "fearful", "disgusted", "surprised", "calm", "fluent", "whipser", "whisper"], "description": "Optional TTS emotion. Forwarded to the TTS adapter as-is." },
+            "add_silence": { "type": "number", "description": "Optional add_silence passthrough." },
+            "voice_setting": { "type": "object", "description": "Optional native voice_setting passthrough.", "additionalProperties": true },
             "audio_setting": { "type": "object", "description": "Optional audio controls such as sample_rate, bitrate, and channel.", "additionalProperties": true },
             "prefer_sync_tts": { "type": "boolean", "description": "Prefer synchronous TTS when supported." },
             "prefer_async_tts": { "type": "boolean", "description": "Prefer asynchronous TTS for long narration when supported." },

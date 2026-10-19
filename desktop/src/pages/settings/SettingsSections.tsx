@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
-import { Activity, Bell, Check, ChevronDown, Copy, Database, Download, ExternalLink, FolderOpen, Info, MessageSquareText, RefreshCw, Save, Search, Square, Trash2, X } from 'lucide-react';
+import { Activity, Bell, Check, ChevronDown, Copy, Database, Download, ExternalLink, FolderOpen, History, Info, MessageSquareText, RefreshCw, Save, Search, Square, Trash2, X } from 'lucide-react';
 import clsx from 'clsx';
 import { APP_BRAND } from '../../config/brand';
 import { SUPPORTED_LANGUAGES, useI18n, type AppLanguage } from '../../i18n';
@@ -401,6 +401,12 @@ interface GeneralSettingsSectionProps {
     handleVersionTap: () => void;
     handleShowCurrentReleaseNotes: () => void;
     handleOpenDownloadPage: () => Promise<void>;
+    isCheckingForUpdate: boolean;
+    updateCheckMessage: string | null;
+    onCheckForUpdate: () => Promise<void>;
+    rollbackVersion: string | null;
+    canRollbackBackup: boolean;
+    onRollbackUpdate: () => Promise<void>;
     handleOpenAppOnboarding?: () => void;
 }
 
@@ -627,6 +633,12 @@ function GeneralSettingsSectionInner({
     handleVersionTap,
     handleShowCurrentReleaseNotes,
     handleOpenDownloadPage,
+    isCheckingForUpdate,
+    updateCheckMessage,
+    onCheckForUpdate,
+    rollbackVersion,
+    canRollbackBackup,
+    onRollbackUpdate,
     handleOpenAppOnboarding,
 }: GeneralSettingsSectionProps) {
     const { language, setLanguage, t } = useI18n();
@@ -777,15 +789,43 @@ function GeneralSettingsSectionInner({
                                 <ExternalLink className="h-3 w-3" />
                             </button>
                         ) : null}
+                        {canRollbackBackup && rollbackVersion ? (
+                            <button
+                                type="button"
+                                onClick={() => void onRollbackUpdate()}
+                                className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-amber-600 dark:text-amber-400 transition-colors hover:text-amber-500"
+                            >
+                                <History className="h-3 w-3" />
+                                {t('settings.general.rollbackTo', { version: rollbackVersion })}
+                            </button>
+                        ) : null}
                     </div>
-                    <button
-                        type="button"
-                        onClick={() => void handleOpenDownloadPage()}
-                        className="flex items-center gap-2 px-3 py-1.5 border border-border text-text-primary text-xs font-medium rounded hover:bg-surface-secondary"
-                    >
-                        <Download className="w-3 h-3" />
-                        {t('settings.general.openDownloadPage')}
-                    </button>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => void onCheckForUpdate()}
+                            disabled={isCheckingForUpdate}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-accent-primary text-white text-xs font-medium rounded hover:bg-accent-hover disabled:opacity-60 transition-colors"
+                        >
+                            <RefreshCw className={clsx('w-3 h-3', isCheckingForUpdate && 'animate-spin')} />
+                            {isCheckingForUpdate
+                                ? t('settings.general.checkingUpdate')
+                                : t('settings.general.checkUpdate')}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleOpenDownloadPage()}
+                            className="flex items-center gap-2 px-3 py-1.5 border border-border text-text-primary text-xs font-medium rounded hover:bg-surface-secondary"
+                        >
+                            <Download className="w-3 h-3" />
+                            {t('settings.general.openDownloadPage')}
+                        </button>
+                        {updateCheckMessage ? (
+                            <span className="text-xs text-text-tertiary max-w-48 text-right">
+                                {updateCheckMessage}
+                            </span>
+                        ) : null}
+                    </div>
                 </div>
             </div>
 

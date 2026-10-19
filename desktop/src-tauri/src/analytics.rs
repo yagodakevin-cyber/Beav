@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter, State};
 
 const BATCH_SCHEMA_VERSION: &str = "redbox.analytics.batch.v1";
 const EVENT_SCHEMA_VERSION: &str = "redbox.analytics.event.v1";
-const DEFAULT_ENDPOINT: &str = "https://redbox.ziz.hk/api/v1/telemetry/capture";
+const DEFAULT_ENDPOINT: &str = "http://127.0.0.1:1/api/v1/telemetry/capture"; // 演绎版：端点指向本地黑洞端口，永不连通
 const MAX_EVENT_BYTES: usize = 8 * 1024;
 const MAX_QUEUE_EVENTS: i64 = 5000;
 const BATCH_SIZE: i64 = 40;

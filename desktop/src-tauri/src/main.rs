@@ -19,6 +19,7 @@ mod chat_title;
 mod cli_runtime;
 mod command_execution;
 mod commands;
+mod dashscope_tts;
 mod desktop_io;
 mod diagnostics;
 mod document_ingest;
@@ -129,7 +130,6 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState {
             store_path,
             store: shared_store,
@@ -182,6 +182,8 @@ fn main() {
             commands::notifications::notifications_mark_all_remote_read,
             commands::system::app_update::app_check_update,
             commands::system::app_update::app_install_update,
+            commands::system::app_update::app_get_update_status,
+            commands::system::app_update::app_rollback_update,
             commands::redclaw::redclaw_runner_status
         ])
         .setup(startup::run_setup_restore_sequence)

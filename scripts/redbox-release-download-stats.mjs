@@ -2,7 +2,7 @@
 
 import { writeFile } from 'node:fs/promises';
 
-const DEFAULT_REPO = 'Jamailar/RedBox';
+const DEFAULT_REPO = 'yagodakevin-cyber/Beav';
 const DEFAULT_PER_PAGE = 100;
 
 function printHelp() {
@@ -24,7 +24,7 @@ Environment:
 Examples:
   node scripts/redbox-release-download-stats.mjs
   node scripts/redbox-release-download-stats.mjs --format json
-  node scripts/redbox-release-download-stats.mjs --repo Jamailar/RedBox --output ./release-downloads.json
+  node scripts/redbox-release-download-stats.mjs --repo yagodakevin-cyber/Beav --output ./release-downloads.json
 `);
 }
 

@@ -488,7 +488,7 @@ export async function runCommand(command, args = [], options = {}) {
       cwd,
       env,
       stdio,
-      shell: false,
+      shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(String(command)),
       windowsHide: true,
     });
 

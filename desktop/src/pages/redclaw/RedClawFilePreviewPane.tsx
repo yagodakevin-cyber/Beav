@@ -229,6 +229,7 @@ export function RedClawFilePreviewPane({
                     <audio
                         src={target.resolvedUrl}
                         controls
+                        controlsList="nodownload"
                         className="w-full"
                         onError={() => setLoadFailed(true)}
                     />

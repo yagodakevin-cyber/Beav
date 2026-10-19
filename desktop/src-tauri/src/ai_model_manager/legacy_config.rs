@@ -9,8 +9,7 @@ use crate::{now_iso, payload_string};
 const MODEL_CONFIG_FILE: &str = "model-config.json";
 const MODEL_CONFIG_VERSION: u64 = 1;
 const DEFAULT_MODELS_INITIALIZED_AT_KEY: &str = "ai_model_defaults_initialized_at";
-const DEFAULT_VOICE_CLONE_MODEL: &str = "cosyvoice-v3.5-plus-voice-clone";
-const MINIMAX_VOICE_CLONE_MODEL: &str = "minimax-voice-clone";
+const DEFAULT_VOICE_CLONE_MODEL: &str = "doubao-voice-clone";
 
 pub(crate) fn model_config_path(store_path: &Path) -> PathBuf {
     store_path
@@ -44,18 +43,8 @@ fn value_string(value: &Value, keys: &[&str]) -> String {
     String::new()
 }
 
-fn normalized_model_key(value: &str) -> String {
-    value.trim().to_ascii_lowercase()
-}
-
 fn clone_model_for_voice_tts_model(tts_model: &str, fallback: &str) -> String {
-    let key = normalized_model_key(tts_model);
-    if key.contains("cosyvoice") {
-        return DEFAULT_VOICE_CLONE_MODEL.to_string();
-    }
-    if key.starts_with("speech-") || key.starts_with("speech_") || key.contains("minimax") {
-        return MINIMAX_VOICE_CLONE_MODEL.to_string();
-    }
+    let _ = tts_model;
     if fallback.trim().is_empty() {
         DEFAULT_VOICE_CLONE_MODEL.to_string()
     } else {
@@ -541,11 +530,9 @@ mod tests {
                 "baseURL": "https://api.ziz.hk/redbox/v1",
                 "model": "qwen3.5-plus"
             })]).unwrap(),
-            "voice_tts_model": "cosyvoice-v3.5-plus",
-            "voice_clone_model": "minimax-voice-clone",
+            "voice_tts_model": "doubao-seed-tts-2.0",
             "ai_model_routes_json": serde_json::to_string(&json!({
-                "voiceTts": { "mode": "official", "sourceId": "redbox_official_auto", "model": "cosyvoice-v3.5-plus" },
-                "voiceClone": { "mode": "official", "sourceId": "redbox_official_auto", "model": "minimax-voice-clone" }
+                "voiceTts": { "mode": "official", "sourceId": "redbox_official_auto", "model": "doubao-seed-tts-2.0" }
             })).unwrap()
         });
 
@@ -553,20 +540,20 @@ mod tests {
 
         assert_eq!(
             config["routes"]["voiceTts"]["model"],
-            json!("cosyvoice-v3.5-plus")
+            json!("doubao-seed-tts-2.0")
         );
         assert_eq!(
             config["routes"]["voiceClone"]["model"],
-            json!("cosyvoice-v3.5-plus-voice-clone")
+            json!("doubao-voice-clone")
         );
     }
 
     #[test]
     fn apply_model_config_pairs_voice_routes_from_config_tts_model() {
         let mut settings = json!({
-            "voice_tts_model": "speech-2.8-turbo",
-            "tts_model": "speech-2.8-turbo",
-            "voice_clone_model": "minimax-voice-clone"
+            "voice_tts_model": "doubao-seed-tts-2.0",
+            "tts_model": "doubao-seed-tts-2.0",
+            "voice_clone_model": ""
         });
         let config = json!({
             "version": 1,
@@ -578,23 +565,22 @@ mod tests {
                 "model": "qwen3.5-plus"
             }],
             "routes": {
-                "voiceTts": { "mode": "official", "sourceId": "redbox_official_auto", "model": "cosyvoice-v3.5-plus" },
-                "voiceClone": { "mode": "official", "sourceId": "redbox_official_auto", "model": "minimax-voice-clone" }
+                "voiceTts": { "mode": "official", "sourceId": "redbox_official_auto", "model": "doubao-seed-tts-2.0" }
             }
         });
 
         apply_model_config_to_settings(&config, &mut settings);
         let routes = parse_json_object_setting(&settings, "ai_model_routes_json");
 
-        assert_eq!(settings["voice_tts_model"], json!("cosyvoice-v3.5-plus"));
-        assert_eq!(settings["tts_model"], json!("cosyvoice-v3.5-plus"));
+        assert_eq!(settings["voice_tts_model"], json!("doubao-seed-tts-2.0"));
+        assert_eq!(settings["tts_model"], json!("doubao-seed-tts-2.0"));
         assert_eq!(
             settings["voice_clone_model"],
-            json!("cosyvoice-v3.5-plus-voice-clone")
+            json!("doubao-voice-clone")
         );
         assert_eq!(
             routes["voiceClone"]["model"],
-            json!("cosyvoice-v3.5-plus-voice-clone")
+            json!("doubao-voice-clone")
         );
     }
 }

@@ -139,6 +139,7 @@ async function startDevServer() {
     stdio: 'inherit',
     env: process.env,
     windowsHide: true,
+    shell: process.platform === 'win32',
   });
 
   const forwardSignal = (signal) => {

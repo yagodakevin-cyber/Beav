@@ -22,7 +22,6 @@ mod tests {
                 "image-director",
                 "image-prompt-optimizer",
                 "content-topic-miner",
-                "cosyvoice-ssml",
                 "member-skill-distiller",
                 "redclaw-style-definition",
                 "skill-creator",

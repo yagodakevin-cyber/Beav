@@ -1,13 +1,11 @@
 # Media Generation Feature
 
-This module owns renderer-side media generation model logic that is shared by the generation studio UI and the media job queue projection.
+This module owns renderer-side media generation model logic that is shared by the toolbox UI (`pages/toolbox`) and the media job queue projection.
 
 ## Current Boundary
 
 - `feedModel.ts` defines the generation feed domain types for image, video, audio, cover, digital human, agent sessions, generated assets, and deleted feed state.
-- It builds normalized generation requests from page form state for manual and agent flows.
-- `agentContext.ts` builds the structured runtime context passed into media-generation Agent mode.
-- `agentSession.ts` owns generation Agent context ids, initial context text, and session metadata.
+- It builds normalized generation requests from page form state for manual flows.
 - `references.ts` owns uploaded attachment classification, preview source resolution, reference contact sheets, and attachment-to-reference conversion.
 - `assetDisplay.ts` owns feed display helpers such as request summaries, placeholder aspect ratios, grid classes, asset naming, and relative time labels.
 - `audioOptions.ts` owns AI source model option projection, model route override resolution, voice list normalization, and audio language/voice option projection.
@@ -26,7 +24,6 @@ This module owns renderer-side media generation model logic that is shared by th
 
 - Form state and direct user interactions.
 - Layout, preview rendering, context menus, and asset actions.
-- Agent chat session mounting and page-level intent consumption.
 
 ## Remaining Test Coverage
 

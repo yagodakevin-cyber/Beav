@@ -11,10 +11,10 @@
 <p align="center">Local-first · Reusable sources · Bring your own model · macOS / Windows / Linux</p>
 
 <p align="center">
-  <a href="https://github.com/Jamailar/Beav/releases/latest"><img src="https://img.shields.io/github/v/release/Jamailar/Beav?style=flat-square&color=C56F2C" alt="Latest Release"></a>
-  <a href="https://github.com/Jamailar/Beav"><img src="https://img.shields.io/github/stars/Jamailar/Beav?style=flat-square&color=C56F2C" alt="GitHub Stars"></a>
-  <a href="https://github.com/Jamailar/Beav/releases"><img src="https://img.shields.io/github/downloads/Jamailar/Beav/total?style=flat-square&color=C56F2C" alt="Total Downloads"></a>
-  <a href="https://github.com/Jamailar/Beav/releases/latest"><img src="https://img.shields.io/github/release-date/Jamailar/Beav?style=flat-square&color=6C757D" alt="Release Date"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases/latest"><img src="https://img.shields.io/github/v/release/yagodakevin-cyber/Beav?style=flat-square&color=C56F2C" alt="Latest Release"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav"><img src="https://img.shields.io/github/stars/yagodakevin-cyber/Beav?style=flat-square&color=C56F2C" alt="GitHub Stars"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases"><img src="https://img.shields.io/github/downloads/yagodakevin-cyber/Beav/total?style=flat-square&color=C56F2C" alt="Total Downloads"></a>
+  <a href="https://github.com/yagodakevin-cyber/Beav/releases/latest"><img src="https://img.shields.io/github/release-date/yagodakevin-cyber/Beav?style=flat-square&color=6C757D" alt="Release Date"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT--NC-6C757D?style=flat-square" alt="License"></a>
   <a href="https://beav.pro/download"><img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-6C757D?style=flat-square" alt="Platform"></a>
 </p>
@@ -87,21 +87,21 @@ Every capability below is implemented today.
 
 ### Comment insights
 
-![Comment insights](https://github.com/Jamailar/Beav/releases/download/v2.3.0/redbox-2.3.0-comment-insights.png)
+- Comment insights: aggregates comment-section hotspots and audience sentiment to inform topic selection and content review.
 
 ## Quick start
 
 1. Install Beav from the [download page](https://beav.pro/download).
 2. Create one workspace for an account or brand.
 3. Open `Settings → AI` to use the official AI service or configure your own endpoint, API key, and model.
-4. For browser capture, get the Chrome / Edge extension from the [latest Release](https://github.com/Jamailar/Beav/releases/latest).
+4. For browser capture, get the Chrome / Edge extension from the [latest Release](https://github.com/yagodakevin-cyber/Beav/releases/latest).
 
 ## Trust and boundaries
 
 - **Local-first:** sources, manuscripts, and projects are organized around local workspaces.
 - **Model choice:** use the official AI service or an OpenAI-compatible provider.
 - **Transparent releases:** installers, extensions, updater assets, and signatures are published through GitHub Releases.
-- **Public boundaries:** review the license, [changelog](./CHANGELOG.md), [roadmap](./ROADMAP.md), and [Issues](https://github.com/Jamailar/Beav/issues).
+- **Public boundaries:** review the license, [changelog](./CHANGELOG.md), [roadmap](./ROADMAP.md), and [Issues](https://github.com/yagodakevin-cyber/Beav/issues).
 
 ## Agent integration
 
@@ -110,8 +110,8 @@ External agents such as Codex, Hermes, and OpenClaw can use the local ACP Agent 
 ## Community
 
 - [Website and downloads](https://beav.pro/)
-- [GitHub Releases](https://github.com/Jamailar/Beav/releases)
-- [Issues](https://github.com/Jamailar/Beav/issues)
+- [GitHub Releases](https://github.com/yagodakevin-cyber/Beav/releases)
+- [Issues](https://github.com/yagodakevin-cyber/Beav/issues)
 - [Bilibili video tutorial](https://www.bilibili.com/video/BV12LNn6nEem/)
 
 Beav is independently developed and maintained by [JambaHailar](https://x.com/JambaHailar).

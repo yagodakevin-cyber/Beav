@@ -114,7 +114,7 @@ export function MediaAssetPreviewOverlay({
                     ) : isAudioAsset(asset) ? (
                         <div className="w-full max-w-2xl rounded-xl border border-white/10 bg-black/38 p-5 shadow-2xl">
                             <div className="mb-3 text-sm text-white/78">{asset.title || asset.id}</div>
-                            <audio src={src} className="w-full" controls autoPlay />
+                            <audio src={src} className="w-full" controls controlsList="nodownload" autoPlay />
                         </div>
                     ) : (
                         <img

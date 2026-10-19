@@ -18,6 +18,7 @@ const child = spawn(command, ['exec', 'tauri', 'dev', ...process.argv.slice(2)],
   stdio: 'inherit',
   env,
   windowsHide: true,
+  shell: process.platform === 'win32',
 });
 
 const forwardSignal = (signal) => {

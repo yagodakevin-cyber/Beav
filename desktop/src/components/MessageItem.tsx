@@ -854,6 +854,25 @@ function MessageLinkPreviewCard({
           </span>
           <button
             type="button"
+            onClick={() => {
+              const source = target.localPathCandidate || target.href;
+              if (!source) return;
+              const fallbackName = `audio-${Date.now()}.mp3`;
+              const nameFromUrl = getUrlFilename(source) || fallbackName;
+              const defaultName = /\.(mp3|wav|m4a|ogg|flac|aac)$/i.test(nameFromUrl) ? nameFromUrl : fallbackName;
+              void window.ipcRenderer.files
+                .saveAs({ source, defaultName })
+                .catch((error) => console.error('Failed to save audio:', error));
+            }}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-surface-primary/90 text-text-secondary transition-colors hover:text-accent-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={!target.localPathCandidate && !target.href}
+            aria-label="下载音频文件"
+            title="下载音频文件"
+          >
+            <Download className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={handleOpen}
             className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-surface-primary/90 text-text-secondary transition-colors hover:text-accent-primary"
             aria-label="打开音频文件"
@@ -862,7 +881,7 @@ function MessageLinkPreviewCard({
             <ExternalLink className="h-4 w-4" />
           </button>
         </span>
-        <audio controls src={target.resolvedUrl} className="w-full" preload="metadata" />
+        <audio controls controlsList="nodownload" src={target.resolvedUrl} className="w-full" preload="metadata" />
       </span>
     );
   }

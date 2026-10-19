@@ -10,4 +10,4 @@ node scripts/redbox-release-download-stats.mjs --format json
 node scripts/redbox-release-download-stats.mjs --output ./release-downloads.csv --format csv
 ```
 
-默认仓库为 `Jamailar/RedBox`，可用 `--repo owner/name` 覆盖。
+默认仓库为 `yagodakevin-cyber/Beav`，可用 `--repo owner/name` 覆盖。
